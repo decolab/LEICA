@@ -1,0 +1,394 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1671\cocoasubrtf200
+{\fonttbl\f0\fnil\fcharset0 Cambria;\f1\froman\fcharset0 TimesNewRomanPSMT;\f2\fnil\fcharset0 Cambria-Italic;
+\f3\froman\fcharset0 TimesNewRomanPS-ItalicMT;}
+{\colortbl;\red255\green255\blue255;\red112\green112\blue112;\red46\green46\blue46;\red255\green0\blue0;
+}
+{\*\expandedcolortbl;;\csgenericrgb\c43922\c43922\c43922;\csgenericrgb\c18039\c18039\c18039;\csgenericrgb\c100000\c0\c0;
+}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc0\levelnfcn0\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{decimal\}.}{\leveltext\leveltemplateid1\'02\'00.;}{\levelnumbers\'01;}\fi-360\li720\lin720 }{\listname ;}\listid1}
+{\list\listtemplateid2\listhybrid{\listlevel\levelnfc0\levelnfcn0\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{decimal\}.}{\leveltext\leveltemplateid101\'02\'00.;}{\levelnumbers\'01;}\fi-360\li720\lin720 }{\listlevel\levelnfc3\levelnfcn3\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{upper-alpha\}.}{\leveltext\leveltemplateid102\'02\'01.;}{\levelnumbers\'01;}\fi-360\li1440\lin1440 }{\listlevel\levelnfc2\levelnfcn2\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{lower-roman\}.}{\leveltext\leveltemplateid103\'02\'02.;}{\levelnumbers\'01;}\fi-360\li2160\lin2160 }{\listlevel\levelnfc0\levelnfcn0\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{decimal\}.}{\leveltext\leveltemplateid104\'02\'03.;}{\levelnumbers\'01;}\fi-360\li2880\lin2880 }{\listlevel\levelnfc4\levelnfcn4\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{lower-alpha\}.}{\leveltext\leveltemplateid105\'02\'04.;}{\levelnumbers\'01;}\fi-360\li3600\lin3600 }{\listlevel\levelnfc2\levelnfcn2\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{lower-roman\}.}{\leveltext\leveltemplateid106\'02\'05.;}{\levelnumbers\'01;}\fi-360\li4320\lin4320 }{\listname ;}\listid2}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}{\listoverride\listid2\listoverridecount0\ls2}}
+{\info
+{\author David Sutherland Blair}}\paperw12240\paperh15840\margb1080\vieww12540\viewh13620\viewkind1
+\deftab720
+\pard\pardeftab720\ri0\sl288\slmult1\sa360\partightenfactor0
+
+\f0\fs28 \cf2 10.01.2019\
+\pard\pardeftab720\ri0\sl288\slmult1\sb240\partightenfactor0
+
+\fs54 \cf3 \kerning1\expnd1\expndtw6
+ICA-Based Extraction of Instantaneous Functional Connectivity
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li360\fi-360\ri0\sl288\slmult1\sb600\sa60\partightenfactor0
+\ls1\ilvl0
+\f0\fs26 \cf3 \kerning1\expnd2\expndtw14
+1.	Original Script Structure\
+\pard\pardeftab720\li360\ri0\sl288\slmult1\sa120\partightenfactor0
+
+\fs22 \cf2 \kerning1\expnd2\expndtw14
+We here review the structure of the original script in order to understand its function and how we may modify it to suit our purposes.\
+\pard\pardeftab720\li720\fi-360\ri0\sl288\slmult1\sb40\sa120\partightenfactor0
+\ls2\ilvl1\cf3 \kerning1\expnd0\expndtw0 A.	\kerning1\expnd2\expndtw14
+Set paths and filenames
+\f1 \kerning1\expnd2\expndtw14
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0 \cf0 \kerning1\expnd0\expndtw0 i.	\cf2 \kerning1\expnd2\expndtw14
+Defines paths that scripts, functions of ICA-based extraction will require
+\f1 \kerning1\expnd2\expndtw14
+\
+\ls2\ilvl2
+\f0 \cf0 \kerning1\expnd0\expndtw0 ii.	\cf2 \kerning1\expnd2\expndtw14
+Adds paths for toolboxes, function directories to MATLAB search path
+\f1 \kerning1\expnd2\expndtw14
+\
+\pard\pardeftab720\li720\fi-360\ri0\sl288\slmult1\sb40\sa120\partightenfactor0
+\ls2\ilvl1
+\f0 \cf3 \kerning1\expnd0\expndtw0 B.	\kerning1\expnd2\expndtw14
+Define files of interest
+\f1 \kerning1\expnd2\expndtw14
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0 \cf0 \kerning1\expnd0\expndtw0 i.	\cf2 \kerning1\expnd2\expndtw14
+Defines file(s) containing data\
+\ls2\ilvl2\cf0 \kerning1\expnd0\expndtw0 ii.	\cf2 \kerning1\expnd2\expndtw14
+Defines files(s) to which to save results\
+\pard\pardeftab720\li720\fi-360\ri0\sl288\slmult1\sb40\sa120\partightenfactor0
+\ls2\ilvl1\cf3 \kerning1\expnd0\expndtw0 C.	\kerning1\expnd2\expndtw14
+Load & organize data\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2\cf0 \kerning1\expnd0\expndtw0 i.	\cf2 \kerning1\expnd2\expndtw14
+Loads data\
+\ls2\ilvl2\cf0 \kerning1\expnd0\expndtw0 ii.	\cf2 \kerning1\expnd2\expndtw14
+Defines data indices and arrays:\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+Sets indices to indicate data classes\
+\ls2\ilvl3\cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+Selects data classes of interest\
+\ls2\ilvl3\cf0 \kerning1\expnd1\expndtw6
+3.	\cf2 \kerning1\expnd1\expndtw6
+Extracts time courses for each subject & each class\
+\pard\pardeftab720\li720\fi-360\ri0\sl288\slmult1\sb40\sa120\partightenfactor0
+\ls2\ilvl1
+\f0\i0 \cf3 \kerning1\expnd0\expndtw0 D.	\kerning1\expnd1\expndtw6
+Set parameters
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0 \cf0 \kerning1\expnd0\expndtw0 i.	\cf2 \kerning1\expnd1\expndtw6
+Sets parameters for clustering algorithm (KNN)
+\f1 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl2
+\f0 \cf0 \kerning1\expnd0\expndtw0 ii.	\cf2 \kerning1\expnd1\expndtw6
+Extract parameters from data arrays:
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+Number of ROIs
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+Number of subjects
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+3.	\cf2 \kerning1\expnd1\expndtw6
+Number of data points\
+\pard\pardeftab720\li720\fi-360\ri0\sl288\slmult1\sb40\sa120\partightenfactor0
+\ls2\ilvl1
+\f0\i0 \cf3 \kerning1\expnd0\expndtw0 E.	\kerning1\expnd1\expndtw6
+Compute independent components
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0 \cf0 \kerning1\expnd0\expndtw0 i.	\cf2 \kerning1\expnd1\expndtw6
+Set parameters [move to Section III]:
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+Set Time to Repetition
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+Find total number of data points
+\f3 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0\i0 \cf0 \kerning1\expnd0\expndtw0 ii.	\cf2 \kerning1\expnd1\expndtw6
+Preallocate archive arrays:
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+FC patterns
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+Connectivity over all time
+\f3 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0\i0 \cf0 \kerning1\expnd0\expndtw0 iii.	\cf2 \kerning1\expnd1\expndtw6
+Define bandpass filter \cf4 \kerning1\expnd1\expndtw6
+[make separate function & move to Section III]
+\f1 \cf2 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl2
+\f0 \cf0 \kerning1\expnd0\expndtw0 iv.	\cf2 \kerning1\expnd1\expndtw6
+Compute independent components:
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+Divide computation by condition, subject
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+For each condition & each subject:\
+\pard\pardeftab720\li1800\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl4\cf3 \kerning1\expnd1\expndtw6
+a.	Extract number of ROIs, number of data points\
+b.	Extract AAL-parcellated BOLD time course\
+c.	Discard excess data points in extracted time course\
+d.	Preallocate phase storage array
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl4
+\f2 \kerning1\expnd1\expndtw6
+e.	Extract phase time course for each ROI \cf4 \kerning1\expnd1\expndtw6
+[make separate function]\cf3 \kerning1\expnd1\expndtw6
+:\
+\pard\pardeftab720\li2160\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl5
+\f0\i0 \cf3 \kerning1\expnd2\expndtw12
+i.	Demean and detrend data\
+ii.	Pass data through narrowband filter\
+\pard\pardeftab720\li2160\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl5
+\f2\i \cf3 \kerning1\expnd2\expndtw12
+iii.	z
+\f1\i0 \kerning1\expnd2\expndtw12
+-
+\f0 \kerning1\expnd2\expndtw12
+score the BOLD signal\
+iv.	Hilbert-transform the BOLD signal\
+v.	Compute phase angle of Hilbert-transformed BOLD signal\
+\pard\pardeftab720\li1800\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl4
+\f2\i \cf3 \kerning1\expnd1\expndtw6
+f.	Compute instantaneous phase-locked FC for each time point \cf4 \kerning1\expnd1\expndtw6
+[make separate function]\cf3 \kerning1\expnd1\expndtw6
+:\
+\pard\pardeftab720\li2160\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl5
+\f0\i0 \cf3 \kerning1\expnd2\expndtw12
+i.	Preallocate phase synchrony storage matrix
+\f1 \kerning1\expnd2\expndtw12
+\
+\ls2\ilvl5
+\f0 \kerning1\expnd2\expndtw12
+ii.	Calculate phase storage matrix \cf4 \kerning1\expnd2\expndtw12
+[edit: change limits of 
+\f2\i \kerning1\expnd2\expndtw12
+m
+\f0\i0 \kerning1\expnd2\expndtw12
+ such that we only calculate the lower triangle]
+\f1 \cf3 \kerning1\expnd2\expndtw12
+\
+\ls2\ilvl5
+\f0 \kerning1\expnd2\expndtw12
+iii.	Vectorize phase synchrony matrix
+\f1 \kerning1\expnd2\expndtw12
+\
+\ls2\ilvl5
+\f0 \kerning1\expnd2\expndtw12
+iv.	Place vectorized phase synchrony matrix into concatenaged storage array\
+v.	Record condition, subject of current synchrony data
+\f1 \kerning1\expnd2\expndtw12
+\
+\ls2\ilvl5
+\f0 \kerning1\expnd2\expndtw12
+vi.	Place 
+\f2\i \kerning1\expnd2\expndtw12
+z
+\f0\i0 \kerning1\expnd2\expndtw12
+-scored BOLD signal into concatenated storage array\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+3.	\cf2 \kerning1\expnd1\expndtw6
+Extract assembly vectors using independent component analysis
+\f3 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1800\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl4
+\f2 \cf3 \kerning1\expnd1\expndtw6
+a.	From concatenated phase-synchrony data\
+b.	From concatenated z-scored BOLD signal\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0\i0 \cf0 \kerning1\expnd0\expndtw0 v.	\cf2 \kerning1\expnd1\expndtw6
+Find number of assemblies
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+From concatenated phase-synchrony data
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+From concatenated z-scored BOLD signal
+\f3 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0\i0 \cf0 \kerning1\expnd0\expndtw0 vi.	\cf2 \kerning1\expnd1\expndtw6
+Compute assembly activation epochs:
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+Define assembly spaces
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+For each time point and each assembly, project time point onto assembly
+\f3 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0\i0 \cf0 \kerning1\expnd0\expndtw0 vii.	\cf2 \kerning1\expnd1\expndtw6
+Compute Shannon entropy of each assembly
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+For each condition and each subject:
+\f3 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1800\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl4
+\f2 \cf3 \kerning1\expnd1\expndtw6
+a.	Select the relevant data from the Projection array\
+b.	Compute the condition-, subject-, and assembly-wise Shannon entropy\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3\cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+Store condition-, subject-, and assembly-wise Shannon entropy
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+3.	\cf2 \kerning1\expnd1\expndtw6
+Take sum of Shannon entropy over all assemblies (total entropy for each condition, each subject)\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0\i0 \cf0 \kerning1\expnd0\expndtw0 viii.	\cf2 \kerning1\expnd1\expndtw6
+Test equivalence of Shannon entropies between conditions using Wilcoxon rank-sum hypothesis test\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+Total entropy for each condition, subject
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+Assemblywise entropy for each condition, subject\
+\ls2\ilvl3\cf0 \kerning1\expnd1\expndtw6
+3.	\cf2 \kerning1\expnd1\expndtw6
+Detect assemblies which significantly differ in entopy between conditions
+\f3 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0\i0 \cf0 \kerning1\expnd0\expndtw0 ix.	\cf2 \kerning1\expnd1\expndtw6
+Store membership matrix for phase synchrony assemblies (\cf4 \kerning1\expnd1\expndtw6
+why not for 
+\f2\i \kerning1\expnd1\expndtw6
+z
+\f0\i0 \kerning1\expnd1\expndtw6
+-score as well?\cf2 \kerning1\expnd1\expndtw6
+).
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li720\fi-360\ri0\sl288\slmult1\sb40\sa120\partightenfactor0
+\ls2\ilvl1
+\f0 \cf3 \kerning1\expnd0\expndtw0 F.	\kerning1\expnd1\expndtw6
+Plot results
+\f1 \kerning1\expnd1\expndtw6
+\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0 \cf0 \kerning1\expnd0\expndtw0 i.	\cf2 \kerning1\expnd1\expndtw6
+Compare condition:\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+Plot mean Shannon entropies of each condition
+\f3 \kerning1\expnd1\expndtw6
+\
+\ls2\ilvl3
+\f2 \cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+Plot standard error of the means\
+\ls2\ilvl3\cf0 \kerning1\expnd1\expndtw6
+3.	\cf2 \kerning1\expnd1\expndtw6
+Mark significantly different entropies with black stars\
+\pard\pardeftab720\li1080\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl2
+\f0\i0 \cf0 \kerning1\expnd0\expndtw0 ii.	\cf2 \kerning1\expnd1\expndtw6
+Plot which assemblies demonstrate significant differences between conditions\
+\ls2\ilvl2\cf0 \kerning1\expnd0\expndtw0 iii.	\cf2 \kerning1\expnd1\expndtw6
+Compare assemblies demonstrating significant differences between conditions:\
+\pard\pardeftab720\li1440\fi-360\ri0\sl288\slmult1\sb40\partightenfactor0
+\ls2\ilvl3
+\f2\i \cf0 \kerning1\expnd1\expndtw6
+1.	\cf2 \kerning1\expnd1\expndtw6
+Plot mean Shannon entropies of each condition\
+\ls2\ilvl3\cf0 \kerning1\expnd1\expndtw6
+2.	\cf2 \kerning1\expnd1\expndtw6
+Plot standard error of the mean}
