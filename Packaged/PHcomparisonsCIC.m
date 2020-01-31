@@ -46,7 +46,7 @@ addpath(genpath(path{7}));
 loadFile = 'LEICA90_CIC_Metrics';
 
 % Load data
-metricFig = openfig(fullfile(path{8}, loadFile));
+% metricFig = openfig(fullfile(path{8}, loadFile));
 load(fullfile(path{8}, loadFile));
 
 % File to save
@@ -126,6 +126,30 @@ ylabel('LEICA ICs');
 
 % Compute distance(s) between matrices
 
+
+
+%% Compare ROI activation time series
+
+% Preallocate storage arrays
+sig.AAL.h = nan(N.ROI, 1);
+sig.AAL.p = nan(N.ROI, 1);
+
+% Run tests for each assembly
+for r = 1:N.ROI
+	[sig.AAL.h(r), sig.AAL.p(r)] = kstest2(dFC.cond{1}(r,:), dFC.cond{2}(r,:), 'Alpha',pval.target);
+end
+clear r
+
+% Run FDR correction
+[sig.AAL.FDR] = sort(FDR_benjHoch(sig.AAL.p, pval.target));
+
+% Run Bonferroni multiple comparison correction
+sig.AAL.Bonferroni = (sig.AAL.p < (pval.target/N.ROI));
+
+% Run Dunn-Sidak multiple comparison correction
+alpha = 1-(1-pval.target)^(1/N.ROI);
+sig.AAL.Sidak = (sig.AAL.p < alpha);
+clear alpha
 
 
 %% Compare component activation time series
@@ -507,139 +531,4 @@ clear metricFig
 
 % Save variables
 save(fullfile(path{8}, fileName));
-
-
-
-
-
-
-
-%% 
-
-
-%% 1) Find assemblies which significantly differ between conditions
-
-% % Locate assemblies with significantly different activation distributions
-% [sig.activation, pval.activation] = sigTest(activations.cond, pval.target, N.assemblies(1));
-% N.assemblies(1,2) = nnz(sig.activation{:,'Bonferroni'});		% List number of significantly different assemblies
-% 
-% % Locate assemblies with significantly different entropy distributions
-% [sig.entro.ass, pval.entro.ass] = sigTest(entro.cond, pval.target, N.assemblies(1));
-% N.assemblies(1,5) = nnz(sig.entro.ass{:,'Bonferroni'});			% List number of significantly different assemblies
-% 
-% % Locate assemblies with significantly different hierarchy distributions
-% [sig.cohesive, pval.cohesive] = sigTest(cohesiveness, pval.target, N.ROI);
-% N.assemblies(1,6) = nnz(sig.cohesive{:,'Bonferroni'});			% List number of significantly different assemblies
-% 
-% % Compare assembly activation probabilities between conditions
-% [sig.prob, pval.prob] = sigTest(activations.prob, pval.target, N.assemblies(1));
-% N.assemblies(1,3) = nnz(sig.prob{:,'Bonferroni'});
-% 
-% % Compare assembly metastabilities between conditions
-% [sig.mstable, pval.mstable] = kstest2(metastable(:,1), metastable(:,2));
-% N.assemblies(1,4) = nnz(sig.mstable);
-% 
-% % Convert number of assemblies to table
-% N.assemblies = array2table(N.assemblies, 'VariableNames',clist);
-% 
-% % Save interim results
-% save(fullfile(path{8},fileName));
-% 
-% 
-% %% 2) Find total subjectwise entropy
-% 
-% % Preallocate array
-% entro.subj = nan(max(N.subjects), N.condition);
-% 
-% % Find total entropy (upper bound) per subject
-% for c = 1:N.condition
-% 	entro.subj(1:N.subjects(c),c) = sum(entro.cond{c},2);
-% end
-% entro.subj = array2table(entro.subj, 'VariableNames',I.Properties.VariableNames);
-% clear c
-% 
-% % Compare using KS test
-% [sig.entro.subj, pval.entro.subj] = kstest2(entro.subj{:,'Controls'}, entro.subj{:,'OCD'});
-% 
-% % Save interim results
-% save(fullfile(path{8},fileName));
-% 
-% 
-% %% Plot assemblywise comparison results
-% 
-% % Plot results of activation time series
-% F(N.fig) = PlotComparison(activations.cond, pval.activation, pval.target, sig.activation, N, I.Properties.VariableNames, 'TimeSeries', 'Bonferroni');
-% 
-% % Plot results of activation probability
-% N.fig = N.fig+1;
-% F(N.fig) = PlotComparison(activations.prob, pval.prob, pval.target, sig.prob, N, I.Properties.VariableNames, 'Probability', 'Bonferroni');
-% 
-% % Plot results of entropy comparison
-% N.fig = N.fig+1;
-% F(N.fig) = PlotComparison(entro.cond, pval.entro.ass, pval.target, sig.entro.ass, N, I.Properties.VariableNames, 'Entropy', 'Bonferroni');
-% 
-% % Plot results of entropy comparison
-% N.fig = N.fig+1;
-% F(N.fig) = PlotComparison(cohesiveness, pval.cohesive, pval.target, sig.cohesive, N, I.Properties.VariableNames, 'Cohesion', 'Bonferroni');
-% 
-% % Save figure
-% savefig(F, fullfile(path{8}, fileName), 'compact');
-% 
-% 
-% %% Plot results of metastability comparison
-% 
-% % Open new figure
-% N.fig = N.fig+1;
-% F(N.fig) = figure(N.fig);
-% 
-% % Plot subjectwise entropies as box plot
-% boxplot(metastable, entro.subj.Properties.VariableNames, 'Notch','on');
-% title('Metastability by Condition');
-% ylabel('Metastabiltiy by Subject');
-% if sig.mstable == true
-% 	hold on;
-% 	yt = get(gca, 'YTick');
-% 	axis([xlim    0  ceil(max(yt)*1.2)])
-% 	xt = get(gca, 'XTick');
-% 	hold on
-% 	plot(xt, [1 1]*max(yt)*1.05, '-k',  mean(xt), max(yt)*1.1, '*k');
-% 	ylim([min(yt)*0.8 max(yt)*1.15])
-% 	hold off
-% end
-% 
-% % Save figure(s)
-% savefig(F, fullfile(path{8},fileName), 'compact');
-% 
-% 
-% %% 4) Plot subjectwise Shannon entropy
-% 
-% % Open new figure
-% N.fig = N.fig+1;
-% F(N.fig) = figure(N.fig);
-% 
-% % Plot subjectwise entropies as box plot
-% boxplot(table2array(entro.subj), entro.subj.Properties.VariableNames, 'Notch','on');
-% title('Total Subjectwise Entropy');
-% ylabel('Total Entropy');
-% if sig.entro.subj == true
-% 	hold on;
-% 	yt = get(gca, 'YTick');
-% 	axis([xlim    0  ceil(max(yt)*1.2)])
-% 	xt = get(gca, 'XTick');
-% 	hold on
-% 	plot(xt, [1 1]*max(yt)*1.05, '-k',  mean(xt), max(yt)*1.1, '*k');
-% 	ylim([min(yt)*0.8 max(yt)*1.15])
-% 	hold off
-% end
-% 
-% % Save figure(s)
-% savefig(F, fullfile(path{8},fileName), 'compact');
-% 
-% 
-% %% Compute & plot transition matrices
-% 
-% 
-% 
-% 
-% clear F
 

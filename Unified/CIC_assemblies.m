@@ -51,7 +51,7 @@ clear k
 %% Set file names & load data
 
 % Define files to load
-loadFile = 'LEICA90_PhaseData';
+loadFile = 'LEICA90_Data_Iteration1.mat';
 
 % Load data
 load(fullfile(path{8}, loadFile));
@@ -78,7 +78,7 @@ path{7,1} = fullfile(path{2},'Functions','LEICA');
 path{8,1} = fullfile(path{2},'Results','LEICA');
 
 
-%% 1) Find number of components
+%% 1) Find significant components, percentage of explained variance
 
 % Extract number of assemblies using Marcenko-Pastur distribution
 N.assemblies = NumberofIC(dFC.concat);
@@ -108,35 +108,24 @@ clear explained tVar
 disp('Processing the ICs from BOLD data');
 
 % Compute assembly activity timecourses and memberships
-[activities.concat.TS, memberships, W] = fastica(dFC.concat, 'numOfIC', N.assemblies, 'verbose','off');
-
-% Compute activation, event time courses
-activities.concat.activations = activeMat(activities.concat.TS, 1);
-activities.concat.events = eventMat(activities.concat.activations);
+[activities.concat, memberships, W] = fastica(dFC.concat, 'numOfIC', N.assemblies, 'verbose','off');
 
 
 %% 4) Separate assembly activations by condition & subject
 
 % Declare storage arrays
-activities.cond.TS = cell(1, N.conditions);
-activities.cond.activations = cell(1, N.conditions);
-activities.cond.events = cell(1, N.conditions);
-activities.subj.TS = cell(max(N.subjects), N.conditions);
-activities.subj.activations = cell(max(N.subjects), N.conditions);
-activities.subj.events = cell(max(N.subjects), N.conditions);
+activities.cond = cell(1, N.conditions);
+activities.subj = cell(max(N.subjects), N.conditions);
 
 % Separate assembly activations by condition & subject
 for c = 1:N.conditions
+	
 	I = T.index(2,:) == c;
-	activities.cond.TS{c} = activities.concat.TS(:,I);
-	activities.cond.activations{c} = activities.concat.activations(:,I);
-	activities.cond.events{c} = activities.concat.events(:,I);
+	activities.cond{c} = activities.concat(:,I);
 	
 	for s = 1:N.subjects(c)
 		I = (T.index(2,:) == c & T.index(1,:) == s);
-		activities.subj.TS{s,c} = activities.concat.TS(:,I);
-		activities.subj.activations{s,c} = activities.concat.activations(:,I);
-		activities.subj.events{s,c} = activities.concat.events(:,I);
+		activities.subj{s,c} = activities.concat(:,I);
 	end
 end
 clear I s c
@@ -145,7 +134,9 @@ clear I s c
 %% 5) Normalize & visualize membership weights
 
 % Normalize memberships
-memberships = memberships./max(abs(memberships));
+for k = 1:N.assemblies
+	memberships(:,k) = memberships(:,k)./norm(memberships(:,k));
+end
 
 % Visualize membership weights
 F(N.fig) = figure;
@@ -162,73 +153,86 @@ for k = 1:size(memberships, 2)
 	
 	title(['IC ', num2str(k)]);
 	ylim([0 numel(I)+1]);
-	xlim([-1 1]);
+	xlim([-max(abs(memberships(:,k))) max(abs(memberships(:,k)))]);
 end
 N.fig = N.fig+1;
 clear k m n I
 
 
-%% Visualize component activation over time
+%% Compute LEICA assembly matrices
 
-F(N.fig) = figure;
-colormap jet
-imagesc(activities.concat.TS); colorbar; hold on;
+% Preallocate storage array
+ICs = nan(N.ROI, N.ROI, N.assemblies);
+
+% Compute IC matrices
+for i = 1:size(memberships,2)
+	ICs(:,:,i) = memberships(:,i) * memberships(:,i)';
+end
+clear i
+
+
+%% Compare LEICA assemblies to RSNs
+
+% Load Yeo RSNs
+load(fullfile(path{4}, 'Atlases/AAL', 'RSNsAAL.mat'));
+RSNs = LR_version_symm(Yeo_AAL');
+clear Yeo_AAL
+
+% Generate comparison types, figure titles
+cTypes = {'correlation', 'spearman', 'cosine'};
+cTitles = {'Pearson Distance', 'Spearman Distance', 'Cosine Distance'};
+
+% Visualize relations between ICs and RSNs: Pearson, Spearman, cosine
+F(N.fig) = figure; hold on;
+for k = 1:3
+	subplot(1,3,k); colormap jet
+	imagesc(pdist2(memberships', RSNs', cTypes{k})); colorbar;
+	title(cTitles{k});
+	xlabel('Yeo RSNs');
+	ylabel('LEICA ICs');
+end
+clear cTypes cTitles k
+N.fig = N.fig+1;
+
+
+% Visualize component relationships
+F(N.fig) = figure; colormap jet
+
+subplot(2,2,[1,2]);
+imagesc(activities.concat); colorbar;
 title('Component Activation')
 xlabel('Time Points');
 ylabel('Components');
-N.fig = N.fig + 1;
 
-
-%% Compute component spatial overlap
-
+% Component spatial correlation
+subplot(2,2,3);
 comp.spatial = corr(memberships);
 F(N.fig) = figure;
-imagesc(comp.spatial); colorbar; hold on;
+imagesc(comp.spatial); colorbar;
 title('Component Spatial Correlation')
-N.fig = N.fig + 1;
 
-
-%% Compute component temporal overlap
-
-% Set titles
-tempTitles = {'Pearson Correlation', 'Proportion of Co-Activity', 'Proportion of Co-Activation'};
-
-% Compute temporal correlation & co-activity
-comp.temporal{1} = corr(activities.concat.TS');
-comp.temporal{2} = zeros(N.assemblies, N.assemblies, sum(T.condition));
-comp.temporal{3} = zeros(N.assemblies, N.assemblies, sum(T.condition));
-for t = 1:sum(T.condition)
-	comp.temporal{2}(:,:,t) = activities.concat.activations(:,t) * activities.concat.activations(:,t)';
-	comp.temporal{3}(:,:,t) = activities.concat.events(:,t) * activities.concat.events(:,t)';
-end
-clear t
-
-% Extract activation and event probabilities
-activities.concat.prob.sd = diag(std(comp.temporal{2}, 0, 3));
-events.concat.prob.sd = diag(std(comp.temporal{3}, 0, 3));
-
-% Find mean correlation and co-activation matrix over time
-comp.temporal{2} = mean(comp.temporal{2}, 3);
-comp.temporal{3} = mean(comp.temporal{3}, 3);
-
-% Extract mean probability of activity & activation
-activities.concat.prob.av = diag(comp.temporal{2});
-events.concat.prob.av = diag(comp.temporal{3});
-
-% Visualize correlation, coactivity, co-activation matrices
-F(N.fig) = figure;
-colormap jet
-title('Temporal Relations Between Assemblies');
-for k = 1:3
-	subplot(1,3,k);
-	imagesc(comp.temporal{k}); colorbar; hold on;
-	title(tempTitles{k});
-end
+% Component temporal overlap
+subplot(2,2,4);
+imagesc(corr(activities.concat')); colorbar;
+title('Inter-Assembly Pearson Correlations');
 clear k comp tempTitles
+
+% Count
 N.fig = N.fig+1;
 
 
 %% Save results
+
+% Get file list
+fList = dir(fullfile(path{8}, strcat(fileName, '*')));
+
+% Find number of previous iterations
+nIter = numel(fList);
+clear fList
+
+% Edit fileName
+fileName = strcat(fileName, '_Iteration', num2str(nIter));
+clear nIter
 
 % Save figures
 savefig(F, fullfile(path{8}, fileName), 'compact');

@@ -6,15 +6,7 @@
 % will only add complexity.
 
 
-%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% DATA PIPELINE
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 %%	SETUP
-
-%% Set paths & filenames
 
 % Clear workspace
 clear; close all; clc
@@ -32,18 +24,32 @@ path{1,1} = strjoin(path{1}(1:end-3),'/');
 % Set required subdirectories
 path{4,1} = fullfile(path{2},'Data');
 path{5,1} = fullfile(path{2},'Results');
-path{6,1} = fullfile(path{1},'MATLAB','spm12');
-path{7,1} = fullfile(path{1},'MATLAB','FastICA');
-path{8,1} = fullfile(path{2},'Functions');
-path{9,1} = fullfile(path{2},'Results','LEICA');
+path{6,1} = fullfile(path{2},'Results','LEICA');
 
 % Add relevant paths
-addpath(path{6});
-addpath(path{7});
-addpath(genpath(path{8}));
+fpath{1,1} = fullfile(path{1},'MATLAB','spm12');
+fpath{2,1} = fullfile(path{1},'MATLAB','FastICA');
+fpath{3,1} = fullfile(path{1},'MATLAB','permutationTest');
+fpath{4,1} = fullfile(path{2},'Functions');
+fpath{4,1} = fullfile(path{3},'Functions');
+for k = 1:numel(fpath)-1
+	addpath(fpath{k});
+end
+addpath(genpath(fpath{numel(fpath)}));
+clear fpath
 
+% Set methods
+phaseType = 'cosine';	% for measuring phase: cosine or exponential
+compressType = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
 
-%% Set file names, analysis type
+% File to save
+if strcmpi(compressType, 'eigenvector')
+	fileName = 'LEICA90';
+elseif strcmpi(compressType, 'average')
+	fileName = 'MICA90';
+elseif strcmpi(compressType, 'none')
+	fileName = 'ICA90';
+end
 
 % Define list of patients
 patientList = 'ClinicalData_OCD.xlsx';
@@ -52,30 +58,11 @@ patientList = 'ClinicalData_OCD.xlsx';
 loadDirectory = 'Subjects';
 loadFiles = 'P*';
 
-% Set methods
-phaseType = 'cosine';	% for measuring phase: cosine or exponential
-compressType = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
-
-% Files to save
-if strcmpi(compressType, 'eigenvector')
-	fileName = 'LEICA90_Data';
-elseif strcmpi(compressType, 'average')
-	fileName = 'MICA90_Data';
-elseif strcmpi(compressType, 'none')
-	fileName = 'ICA90_Data';
-end
-
-
-%% Get list of files
-
 % Get file list
 fList = dir(fullfile(path{4}, loadDirectory, loadFiles));
 
 % Get number of files of interest
 nFiles = numel(fList);
-
-
-%% Load data
 
 % Load patient data
 patientData = readtable(fullfile(path{4}, patientList));
@@ -127,9 +114,6 @@ labelROI = string(label90);
 labelROI = LR_version_symm(labelROI);
 clear label90
 
-
-%% Set indices
-
 % Extract indices for BOLD signals of patients, controls
 I(:,1) = ~ismember(fName, patientData{:, 'Code'});
 I(:,2) = ismember(fName, patientData{:, 'Code'});
@@ -152,10 +136,11 @@ labels = cell2table(labels, 'VariableNames',{'Controls','Patients'});
 clear c fName
 
 % Save BOLD data, indices
-save(fullfile(path{8},fileName));
+save(fullfile(path{6},fileName));
 
 
-%% Set parameters
+
+%% Extract dFC
 
 % Temporal parameters
 T.TR = 2.73;			% Repetition Time (seconds)
@@ -181,11 +166,6 @@ co = HShannon_kNN_k_initialization(1);
 % Set figure counter
 N.fig = 1;
 
-
-%% SORTING
-
-%% Extract BOLD time series data to cell array (TS.BOLD)
-
 % Preallocate data arrays
 TS.BOLD = cell(max(N.subjects), N.conditions);
 FC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);
@@ -208,13 +188,7 @@ figure; imagesc(squeeze(mean(FC(:,:,:,1),3,'omitnan'))); title('Mean FC: Patient
 figure; imagesc(squeeze(mean(FC(:,:,:,2),3,'omitnan'))); title('Mean FC: Controls');
 
 % Save interim results
-save(fullfile(path{8}, fileName));
-
-
-
-%% CONVERSION
-
-%% 7) Demean BOLD signal and convert data to phase angle time series
+save(fullfile(path{6}, fileName));
 
 % Preallocate storage arrays
 TS.PH = cell(max(N.subjects), N.conditions);
@@ -227,9 +201,6 @@ for c = 1:N.conditions
 	end
 end
 clear s c
-
-
-%% 8) Compute dFC tensors
 
 % Preallocate storage arrays
 if strcmpi(compressType, 'LEICA') ||  strcmpi(compressType, 'Eigenvector')	% leading eigenvector
@@ -285,10 +256,7 @@ dFC.concat = dFC.concat';
 % Clear dud variables
 clear afilt bfilt c s t m n iPH iZ V1 t_all Isubdiag sc90
 
-
-%% Split dFC into condition, subject signals
-
-% Preallocate storage arrays
+% Preallocate storage arrays for condition-wise dFC, subject-wise dFC
 dFC.cond = cell(1, N.conditions);
 dFC.subj = cell(max(N.subjects), N.conditions);
 
@@ -303,16 +271,202 @@ for c = 1:N.conditions
 end
 clear I s c
 
+% Compute dFC frequency spectra
+L = sum(N.subjects)*T.scan;
+dFCspect.concat = fft(dFC.concat')';
+dFCspect.concat = dFCspect.concat(:, 1:round(L/2+1));
+dFCspect.concat(:, 2:end-1) = 2*dFCspect.concat(:, 2:end-1);
+for c = 1:N.conditions
+	L = N.subjects(c)*T.scan;
+	dFCspect.cond{c} = fft(dFC.cond{c}')';
+	dFCspect.cond{c} = dFCspect.cond{c}(:, 1:round(L/2+1));
+	dFCspect.cond{c}(:, 2:end-1) = 2*dFCspect.cond{c}(:, 2:end-1);
+	for s = 1:N.subjects(c)
+		dFCspect.subj{s,c} = fft(dFC.subj{s,c}')';
+		dFCspect.subj{s,c} = dFCspect.subj{s,c}(:, 1:round(T.scan/2+1));
+		dFCspect.subj{s,c}(:, 2:end-1) = 2*dFCspect.subj{s,c}(:, 2:end-1);
+	end
+end
+clear c s L
 
-%% Save extracted data
+
+
+%% Compute ICs from dFC
+
+% Extract number of assemblies using Marcenko-Pastur distribution
+N.assemblies = NumberofIC(dFC.concat);
+
+% Use PCA to estimate amount of variance captured with N.assemblies
+[~,~,~,~,explained,~] = pca(dFC.concat');
+explainedVar = sum(explained(N.assemblies+1:end));
+
+% Compute assembly activity timecourses and memberships
+disp('Processing the ICs from BOLD data');
+[activities.concat, memberships, W] = fastica(dFC.concat, 'numOfIC', N.assemblies, 'verbose','off');
+
+% Separate assembly activations by condition & subject
+activities.cond = cell(1, N.conditions);
+activities.subj = cell(max(N.subjects), N.conditions);
+for c = 1:N.conditions
+	I = T.index(2,:) == c;
+	activities.cond{c} = activities.concat(:,I);
+	for s = 1:N.subjects(c)
+		I = (T.index(2,:) == c & T.index(1,:) == s);
+		activities.subj{s,c} = activities.concat(:,I);
+	end
+end
+clear I s c
+
+% Normalize membership weights
+for k = 1:N.assemblies
+	memberships(:,k) = memberships(:,k)./norm(memberships(:,k));
+end
+clear k
+
+% Compute LEICA assembly matrices
+ICs = nan(N.ROI, N.ROI, N.assemblies);
+for i = 1:size(memberships,2)
+	ICs(:,:,i) = memberships(:,i) * memberships(:,i)';
+end
+clear i
+
+% Compute IC frequency spectra
+L = sum(N.subjects)*T.scan;
+ICspect.concat = abs(fft(activities.concat')/L)';
+ICspect.concat = ICspect.concat(:, 1:round(L/2+1));
+ICspect.concat(:, 2:end-1) = 2*ICspect.concat(:, 2:end-1);
+for c = 1:N.conditions
+	L = N.subjects(c)*T.scan;
+	ICspect.cond{c} = abs(fft(activities.cond{c}')/L)';
+	ICspect.cond{c} = ICspect.cond{c}(:, 1:round(L/2+1));
+	ICspect.cond{c}(:, 2:end-1) = 2*ICspect.cond{c}(:, 2:end-1);
+	for s = 1:N.subjects(c)
+		ICspect.subj{s,c} = fft(activities.subj{s,c}')';
+		ICspect.subj{s,c} = ICspect.subj{s,c}(:, 1:round(T.scan/2+1));
+		ICspect.subj{s,c}(:, 2:end-1) = 2*ICspect.subj{s,c}(:, 2:end-1);
+	end
+end
+clear c s L
+
+
+%% Compute IC metrics
+
+% Preallocate storage arrays:
+%	Activation magnitude means, medians, standard deviations
+%	Component-wise Kuramoto order parameter & metastability
+%	Subject-wise entropies
+activities.av.cond = nan(N.assemblies, N.conditions);
+activities.md.cond = nan(N.assemblies, N.conditions);
+activities.sd.cond = nan(N.assemblies, N.conditions);
+metastable.cond = nan(1, N.conditions);
+kuramoto.cond = nan(N.conditions, T.scan*max(N.subjects));
+activities.av.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+activities.md.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+activities.sd.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+metastable.subj = nan(max(N.subjects), N.conditions);
+kuramoto.subj = nan(max(N.subjects), N.conditions, T.scan);
+entro.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+for c = 1:N.conditions
+	activities.av.cond(:,c) = mean(activities.cond{c}, 2, 'omitnan');
+	activities.md.cond(:,c) = median(activities.cond{c}, 2, 'omitnan');
+	activities.sd.cond(:,c) = std(activities.cond{c}, 0, 2, 'omitnan');
+	[kuramoto.cond(c, 1:T.scan*N.subjects(c)), metastable.cond(c)] = findStability(activities.cond{c});
+	for s = 1:N.subjects(c)
+		activities.av.subj(:,s,c) = mean(activities.subj{s,c}, 2, 'omitnan');
+		activities.md.subj(:,s,c) = median(activities.subj{s,c}, 2, 'omitnan');
+		activities.sd.subj(:,s,c) = std(activities.subj{s,c}, 0, 2, 'omitnan');
+		[kuramoto.subj(s,c,:), metastable.subj(s,c)] = findStability(activities.subj{s,c});
+		for ass = 1:N.assemblies
+			entro.subj(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
+		end
+	end
+end
+clear c s
+entro.subj = squeeze(sum(entro.subj, 1));
+
+% Convert metrics to table format
+activities.av.cond = array2table(activities.av.cond, 'VariableNames',labels.Properties.VariableNames);
+activities.md.cond = array2table(activities.md.cond, 'VariableNames',labels.Properties.VariableNames);
+activities.sd.cond = array2table(activities.sd.cond, 'VariableNames',labels.Properties.VariableNames);
+metastable.cond = array2table(metastable.cond, 'VariableNames', labels.Properties.VariableNames);
+metastable.subj = array2table(metastable.subj, 'VariableNames', labels.Properties.VariableNames);
+entro.subj = array2table(entro.subj, 'VariableNames', labels.Properties.VariableNames);
+
+
+
+%% Compare IC metrics between conditions, vs. permuted null distribution
+
+% Define test types
+ttype = {'kstest2', 'permutation'};
+
+% Test with Kolmogorov-Smirnov, permutation test
+for t = 1:numel(ttypes)
+	% Compare activations between conditions
+	sig.AAL.TS{t} = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	sig.IC.TS{t} = robustTests(activities.cond{1}, activities.cond{2}, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
+	sig.AAL.F{t} = robustTests(real(dFCspect.cond{1}), real(dFCspect.cond{2}), N.ROI, 'pval',pval.target, 'testtype',ttype{t});	% Compare ROI time series
+	sig.IC.F{t} = robustTests(ICspect.cond{1}, ICspect.cond{2}, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});			% Compare IC time series
+
+	% Average activation magnitude(s)
+	con = activities.av.subj(:,:,1); con = con(isfinite(con));
+	pat = activities.av.subj(:,:,2); pat = pat(isfinite(pat));
+	sig.av{t} = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+
+	% Activation medians(s)
+	con = activities.md.subj(:,:,1); con = con(isfinite(con));
+	pat = activities.md.subj(:,:,2); pat = pat(isfinite(pat));
+	sig.md = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+
+	% Activation standard deviations(s)
+	con = activities.sd.subj(:,:,1); con = con(isfinite(con));
+	pat = activities.sd.subj(:,:,2); pat = pat(isfinite(pat));
+	sig.sd = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+end
+clear con pat
+
+% Subject metastabilities
+con = metastable.subj{:,'Controls'}(isfinite(metastable.subj{:,'Controls'}));
+pat = metastable.subj{:,'Patients'}(isfinite(metastable.subj{:,'Patients'}));
+sigperm.metastable.p = permutationTest(con, pat, 5000, 'sidedness','both');
+if adtest(con) && adtest(pat)
+	[sig.metastable.h, sig.metastable.p] = kstest2(con, pat, 'Alpha',pval.target);
+else
+	[sig.metastable.h, sig.metastable.p] = ttest2(con, pat, 'Alpha',pval.target);
+end
+clear con pat t
+
+% Subject entropies
+con = entro.subj{:,'Controls'}(isfinite(entro.subj{:,'Controls'}));
+pat = entro.subj{:,'Patients'}(isfinite(entro.subj{:,'Patients'}));
+sigperm.entro.p = permutationTest(con, pat, 5000, 'sidedness','both');
+if adtest(con) && adtest(pat)
+	[sig.entro.h, sig.entro.p] = kstest2(con, pat, 'Alpha',pval.target);
+else
+	[sig.entro.h, sig.entro.p] = ttest2(con, pat, 'Alpha',pval.target);
+end
+clear con pat
+
+
+
+%% Save all
 
 % Get file list
-fList = dir(fullfile(path{8}, strcat(fileName, '*')));
+fList = dir(fullfile(path{6}, strcat(fileName, '_*')));
 
 % Find number of previous iterations
 nIter = numel(fList);
 clear fList
 
+% Edit fileName
+fileName = strcat(fileName, '_Iteration', num2str(nIter));
+clear nIter
+
+% Save figures
+if exist('F', 'var')
+	savefig(F, fullfile(path{6}, fileName), 'compact');
+	clear F
+end
+
 % Save all data
-save(fullfile(path{8}, strcat(fileName, '_Iteration', num2str(nIter))));
+save(fullfile(path{6}, fileName));
 
