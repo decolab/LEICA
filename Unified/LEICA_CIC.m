@@ -42,7 +42,7 @@ clear fpath
 load(fullfile(path{4}, 'sc90.mat'));
 
 % Set methods
-phaseType = 'cosine';	% for measuring phase: cosine or exponential
+distType = 'cosine';	% for measuring phase: cosine or exponential
 compressType = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
 
 % File to save
@@ -141,9 +141,6 @@ end
 labels = cell2table(labels, 'VariableNames',{'Control','Patient'});
 clear c fName
 
-% Save BOLD data, indices
-save(fullfile(path{6},fileName));
-
 
 
 %% Extract dFC
@@ -187,9 +184,6 @@ for c = 1:N.conditions
 end
 clear c s ts subjectBOLD
 
-% Save interim results
-save(fullfile(path{6}, fileName));
-
 % Preallocate storage arrays
 TS.PH = cell(max(N.subjects), N.conditions);
 
@@ -204,54 +198,30 @@ clear s c
 
 % Preallocate storage arrays
 if strcmpi(compressType, 'LEICA') ||  strcmpi(compressType, 'Eigenvector')	% leading eigenvector
-	dFC.concat = zeros(T.scan*sum(N.subjects), N.ROI);
+	dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
 elseif strcmpi(compressType, 'average')	% average activity
-	dFC.concat = zeros(T.scan*sum(N.subjects), N.ROI);
+	dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
 else	% vectorized synchrony data
-	dFC.concat = zeros(T.scan*sum(N.subjects), length(Isubdiag));
+	dFC.concat = zeros(length(Isubdiag), T.scan*sum(N.subjects));
 end
 
 % Preallocate variables to save FC patterns and associated information
 T.index = zeros(2, T.scan*sum(N.subjects));	% vector with subject nr and task at each t
-t_all = 0;									% Index of time (starts at 0, updated until N.subjects*T.scan)
+t = 0;									% Index of time (starts at 0, updated until N.subjects*T.scan)
 
 % Compute instantaneous FC (BOLD Phase Synchrony) and leading eigenvector (V1) for each time point
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
-		for t = 1:T.scan
-			
-			% Update time
-			t_all = t_all+1;
-			
-			% Compute instantaneous phase synchrony FC
-			iPH = zeros(N.ROI, N.ROI);
-			if strcmpi(phaseType, 'cosine')
-				for n = 1:N.ROI
-					for m = 1:N.ROI
-						iPH(n,m) = cos(TS.PH{s,c}(n,t) - TS.PH{s,c}(m,t));
-					end
-				end
-			elseif strcmpi(phaseType, 'exponential')
-				for n = 1:N.ROI
-					for m = 1:N.ROI
-						iPH(n,m) = exp(-3*adif(TS.PH{s,c}(n,t), TS.PH{s,c}(m,t))); 
-					end
-				end
-			end
-			
-			% Extract leading eigenvector
-			if strcmpi(compressType, 'eigenvector')
-				[dFC.concat(t_all,:), ~] = eigs(iPH,1);
-			elseif strcmpi(compressType, 'average')
-				dFC.concat(t_all,:) = mean(iPH);
-			else
-				dFC.concat(t_all,:) = iPH(Isubdiag);
-			end
-			T.index(:,t_all) = [s c]';	% Information that at t_all, V1 corresponds to subject s in a given task
-		end
+		
+		% Index subject, condition of current dFC sequence
+		t = t+1 : t+T.scan;
+		T.index(:,t) = repmat([s c]', 1,T.scan);
+		
+		% Extract dFC
+		dFC.concat(:,t) = LEdFC(TS.PH{s,c}, 'distType',distType, 'compressType',compressType, 'nROI',N.ROI, 'T',T.scan);
+		t = t(end);
 	end
 end
-dFC.concat = dFC.concat';
 
 % Clear dud variables
 clear afilt bfilt c s t m n iPH iZ V1 t_all Isubdiag sc90
@@ -294,15 +264,15 @@ clear c s L
 %% Compute ICs from dFC
 
 % Extract number of assemblies using Marcenko-Pastur distribution
-N.assemblies = NumberofIC(dFC.concat);
+N.IC = NumberofIC(dFC.concat);
 
-% Use PCA to estimate amount of variance captured with N.assemblies
+% Use PCA to estimate amount of variance captured with N.IC
 [~,~,~,~,explained,~] = pca(dFC.concat');
-explainedVar = sum(explained(N.assemblies+1:end));
+explainedVar = sum(explained(N.IC+1:end));
 
 % Compute assembly activity timecourses and memberships
 disp('Processing the ICs from BOLD data');
-[activities.concat, memberships, W] = fastica(dFC.concat, 'numOfIC', N.assemblies, 'verbose','off');
+[activities.concat, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
 
 % Separate assembly activations by condition & subject
 activities.cond = cell(1, N.conditions);
@@ -318,13 +288,13 @@ end
 clear I s c
 
 % Normalize membership weights
-for k = 1:N.assemblies
+for k = 1:N.IC
 	memberships(:,k) = memberships(:,k)./norm(memberships(:,k));
 end
 clear k
 
 % Compute LEICA assembly matrices
-ICs = nan(N.ROI, N.ROI, N.assemblies);
+ICs = nan(N.ROI, N.ROI, N.IC);
 for i = 1:size(memberships,2)
 	ICs(:,:,i) = memberships(:,i) * memberships(:,i)';
 end
@@ -355,17 +325,17 @@ clear c s L
 %	Activation magnitude means, medians, standard deviations
 %	Component-wise Kuramoto order parameter & metastability
 %	Subject-wise entropies
-activities.av.cond = nan(N.assemblies, N.conditions);
-activities.md.cond = nan(N.assemblies, N.conditions);
-activities.sd.cond = nan(N.assemblies, N.conditions);
+activities.av.cond = nan(N.IC, N.conditions);
+activities.md.cond = nan(N.IC, N.conditions);
+activities.sd.cond = nan(N.IC, N.conditions);
 metastable.cond = nan(1, N.conditions);
 kuramoto.cond = nan(N.conditions, T.scan*max(N.subjects));
-activities.av.subj = nan(N.assemblies, max(N.subjects), N.conditions);
-activities.md.subj = nan(N.assemblies, max(N.subjects), N.conditions);
-activities.sd.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+activities.av.subj = nan(N.IC, max(N.subjects), N.conditions);
+activities.md.subj = nan(N.IC, max(N.subjects), N.conditions);
+activities.sd.subj = nan(N.IC, max(N.subjects), N.conditions);
 metastable.subj = nan(max(N.subjects), N.conditions);
 kuramoto.subj = nan(max(N.subjects), N.conditions, T.scan);
-entro.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+entro.subj = nan(N.IC, max(N.subjects), N.conditions);
 for c = 1:N.conditions
 	activities.av.cond(:,c) = mean(activities.cond{c}, 2, 'omitnan');
 	activities.md.cond(:,c) = median(activities.cond{c}, 2, 'omitnan');
@@ -376,7 +346,7 @@ for c = 1:N.conditions
 		activities.md.subj(:,s,c) = median(activities.subj{s,c}, 2, 'omitnan');
 		activities.sd.subj(:,s,c) = std(activities.subj{s,c}, 0, 2, 'omitnan');
 		[kuramoto.subj(s,c,:), metastable.subj(s,c)] = findStability(activities.subj{s,c});
-		for ass = 1:N.assemblies
+		for ass = 1:N.IC
 			entro.subj(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
 		end
 	end
@@ -397,42 +367,40 @@ entro.subj = array2table(entro.subj, 'VariableNames', labels.Properties.Variable
 %% Compare IC metrics between conditions, vs. permuted null distribution
 
 % Define test types
-ttype = {'kstest2', 'permutation'};
+ttype = {'kstest2', 'ranksum', 'permutation'};
 
 % Test with Kolmogorov-Smirnov, permutation test
 for t = 1:numel(ttype)
 	% Compare activations between conditions
-	sig.AAL.TS{t} = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
-	sig.IC.TS{t} = robustTests(activities.cond{1}, activities.cond{2}, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
-	sig.AAL.F{t} = robustTests(real(dFCspect.cond{1}), real(dFCspect.cond{2}), N.ROI, 'pval',pval.target, 'testtype',ttype{t});	% Compare ROI time series
-	sig.IC.F{t} = robustTests(ICspect.cond{1}, ICspect.cond{2}, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});			% Compare IC time series
-
+	sig.AAL.TS{t} = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'p',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	sig.IC.TS{t} = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
+	
 	% Average activation magnitude(s)
 	con = activities.av.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.av.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.av{t} = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+	sig.av{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
 
 	% Activation medians(s)
 	con = activities.md.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.md.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.md = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+	sig.md{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
 
 	% Activation standard deviations(s)
 	con = activities.sd.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.sd.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.sd = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+	sig.sd{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
 end
 clear con pat t
 
 % Subject metastabilities
 con = metastable.subj{:,'Control'}(isfinite(metastable.subj{:,'Control'}));
 pat = metastable.subj{:,'Patient'}(isfinite(metastable.subj{:,'Patient'}));
-sig.metastable.p = permutationTest(con, pat, 'exact',1, 'sidedness','both');
+sig.metastable.p = permutationTest(con, pat, 10000, 'sidedness','both');
 
 % Subject entropies
 con = entro.subj{:,'Control'}(isfinite(entro.subj{:,'Control'}));
 pat = entro.subj{:,'Patient'}(isfinite(entro.subj{:,'Patient'}));
-sig.entro.p = permutationTest(con, pat, 'exact',1, 'sidedness','both');
+sig.entro.p = permutationTest(con, pat, 10000, 'sidedness','both');
 
 
 

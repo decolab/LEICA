@@ -144,9 +144,6 @@ end
 labels = cell2table(labels, 'VariableNames',{'Control','Patient'});
 clear c fName
 
-% Save BOLD data, indices
-save(fullfile(path{6},fileName));
-
 
 
 %% Extract dFC
@@ -189,9 +186,6 @@ for c = 1:N.conditions
 	end
 end
 clear c s ts subjectBOLD
-
-% Save interim results
-save(fullfile(path{6}, fileName));
 
 % Preallocate storage arrays
 TS.PH = cell(max(N.subjects), N.conditions);
@@ -345,25 +339,31 @@ for c = 1:N.conditions
 	
 	% Extract subject activation sequences
 	for s = 1:N.subjects(c)
-		I = (T.index(2,:) == c & T.index(1,:) == s);
+		t = T.index(1,(T.index(2,:) == c));
+		I = (t == s);
 		activities.subj{s,c} = activities.cond{c}(:,I);
 	end
 end
+clear I t c s
 
 % Project timeseries onto alternative components
 N.permutations = nchoosek(N.conditions, 1);
+permutations = nan(N.permutations, 2);
+for p = 1:2:N.permutations
+	permutations(p,:) = nchoosek(1:N.conditions, 2);
+	permutations(p+1,:) = flip(permutations(p,:));
+end
 projections.cond = cell(N.permutations, 1);
 projections.subj = cell(max(N.subjects), N.permutations);
-projections.cond{1} =  W{1}*dFC.cond{2};
-projections.cond{2} =  W{2}*dFC.cond{1};
-for c = 1:N.permutations
-	for s = 1:N.subjects(c)
-		I = (T.index(2,:) == c);
-		I = (I(1,:) == s);
-		projections.subj{s,c} = projections.cond{c}(:,I);
+for p = 1:N.permutations
+	projections.cond{p} =  W{permutations(p,1)}*dFC.cond{permutations(p,2)};
+	for s = 1:N.subjects(p)
+		t = T.index(1,(T.index(2,:) == permutations(p,2)));
+		I = (t == s);
+		projections.subj{s,p} = projections.cond{p}(:,I);
 	end
 end
-
+clear I t p s
 
 
 %% Compute IC metrics
@@ -372,17 +372,17 @@ end
 %	Activation magnitude means, medians, standard deviations
 %	Component-wise Kuramoto order parameter & metastability
 %	Subject-wise entropies
-activities.av.cond = nan(N.assemblies, N.conditions);
-activities.md.cond = nan(N.assemblies, N.conditions);
-activities.sd.cond = nan(N.assemblies, N.conditions);
+activities.av.cond = nan(N.IC, N.conditions);
+activities.md.cond = nan(N.IC, N.conditions);
+activities.sd.cond = nan(N.IC, N.conditions);
 activities.metastable.cond = nan(N.conditions, 1);
 activities.kuramoto.cond = nan(N.conditions, T.scan*max(N.subjects));
-activities.av.subj = nan(N.assemblies, max(N.subjects), N.conditions);
-activities.md.subj = nan(N.assemblies, max(N.subjects), N.conditions);
-activities.sd.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+activities.av.subj = nan(N.IC, max(N.subjects), N.conditions);
+activities.md.subj = nan(N.IC, max(N.subjects), N.conditions);
+activities.sd.subj = nan(N.IC, max(N.subjects), N.conditions);
 activities.metastable.subj = nan(max(N.subjects), N.conditions);
 activities.kuramoto.subj = nan(max(N.subjects), N.conditions, T.scan);
-activities.entro.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+activities.entro.subj = nan(N.IC, max(N.subjects), N.conditions);
 for c = 1:N.conditions
 	activities.av.cond(:,c) = mean(activities.cond{c}, 2, 'omitnan');
 	activities.md.cond(:,c) = median(activities.cond{c}, 2, 'omitnan');
@@ -393,7 +393,7 @@ for c = 1:N.conditions
 		activities.md.subj(:,s,c) = median(activities.subj{s,c}, 2, 'omitnan');
 		activities.sd.subj(:,s,c) = std(activities.subj{s,c}, 0, 2, 'omitnan');
 		[activities.kuramoto.subj(s,c,:), activities.metastable.subj(s,c)] = findStability(activities.subj{s,c});
-		for ass = 1:N.assemblies
+		for ass = 1:N.IC
 			activities.entro.subj(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
 		end
 	end
@@ -417,17 +417,17 @@ activities.entro.subj = array2table(activities.entro.subj, 'VariableNames', labe
 %	Activation magnitude means, medians, standard deviations
 %	Component-wise Kuramoto order parameter & metastability
 %	Subject-wise entropies
-projections.av.cond = nan(N.assemblies, N.conditions);
-projections.md.cond = nan(N.assemblies, N.conditions);
-projections.sd.cond = nan(N.assemblies, N.conditions);
+projections.av.cond = nan(N.IC, N.conditions);
+projections.md.cond = nan(N.IC, N.conditions);
+projections.sd.cond = nan(N.IC, N.conditions);
 projections.metastable.cond = nan(N.conditions, 1);
 projections.kuramoto.cond = nan(N.conditions, T.scan*max(N.subjects));
-projections.av.subj = nan(N.assemblies, max(N.subjects), N.conditions);
-projections.md.subj = nan(N.assemblies, max(N.subjects), N.conditions);
-projections.sd.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+projections.av.subj = nan(N.IC, max(N.subjects), N.conditions);
+projections.md.subj = nan(N.IC, max(N.subjects), N.conditions);
+projections.sd.subj = nan(N.IC, max(N.subjects), N.conditions);
 projections.metastable.subj = nan(max(N.subjects), N.conditions);
 projections.kuramoto.subj = nan(max(N.subjects), N.conditions, T.scan);
-projections.entro.subj = nan(N.assemblies, max(N.subjects), N.conditions);
+projections.entro.subj = nan(N.IC, max(N.subjects), N.conditions);
 for c = 1:N.conditions
 	projections.av.cond(:,c) = mean(projections.cond{c}, 2, 'omitnan');
 	projections.md.cond(:,c) = median(projections.cond{c}, 2, 'omitnan');
@@ -438,7 +438,7 @@ for c = 1:N.conditions
 		projections.md.subj(:,s,c) = median(projections.subj{s,c}, 2, 'omitnan');
 		projections.sd.subj(:,s,c) = std(projections.subj{s,c}, 0, 2, 'omitnan');
 		[projections.kuramoto.subj(s,c,:), projections.metastable.subj(s,c)] = findStability(projections.subj{s,c});
-		for ass = 1:N.assemblies
+		for ass = 1:N.IC
 			projections.entro.subj(ass, s, c) = HShannon_kNN_k_estimation(projections.subj{s,c}(ass,:), co);
 		end
 	end
@@ -465,22 +465,22 @@ ttype = {'kstest2', 'permutation'};
 for t = 1:numel(ttype)
 	% Compare activations between conditions
 	sig.AAL.TS{t} = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
-	sig.act.IC.TS{t} = robustTests(activities.cond{1}, activities.cond{2}, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
+	sig.act.IC.TS{t} = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
 	
 	% Average activation magnitude(s)
 	con = activities.av.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.av.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.act.av{t} = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+	sig.act.av{t} = robustTests(con, pat, N.IC, 'pval',pval.target, 'testtype',ttype{t});
 
 	% Activation medians(s)
 	con = activities.md.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.md.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.act.md = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+	sig.act.md = robustTests(con, pat, N.IC, 'pval',pval.target, 'testtype',ttype{t});
 
 	% Activation standard deviations(s)
 	con = activities.sd.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.sd.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.act.sd = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+	sig.act.sd = robustTests(con, pat, N.IC, 'pval',pval.target, 'testtype',ttype{t});
 end
 clear con pat t
 
@@ -507,22 +507,22 @@ ttype = {'kstest2', 'permutation'};
 for t = 1:numel(ttype)
 	% Compare activations between conditions
 	sig.proj.AAL.TS{t} = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
-	sig.proj.IC.TS{t} = robustTests(projections.cond{1}, projections.cond{2}, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
+	sig.proj.IC.TS{t} = robustTests(projections.cond{1}, projections.cond{2}, N.IC, 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
 	
 	% Average activation magnitude(s)
 	con = projections.av.subj(:,:,1); con = con(isfinite(con));
 	pat = projections.av.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.proj.av{t} = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+	sig.proj.av{t} = robustTests(con, pat, N.IC, 'pval',pval.target, 'testtype',ttype{t});
 
 	% Activation medians(s)
 	con = projections.md.subj(:,:,1); con = con(isfinite(con));
 	pat = projections.md.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.proj.md = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+	sig.proj.md = robustTests(con, pat, N.IC, 'pval',pval.target, 'testtype',ttype{t});
 
 	% Activation standard deviations(s)
 	con = projections.sd.subj(:,:,1); con = con(isfinite(con));
 	pat = projections.sd.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.proj.sd = robustTests(con, pat, N.assemblies, 'pval',pval.target, 'testtype',ttype{t});
+	sig.proj.sd = robustTests(con, pat, N.IC, 'pval',pval.target, 'testtype',ttype{t});
 end
 clear con pat t
 
