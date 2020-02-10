@@ -36,7 +36,7 @@ for k = 1:numel(fpath)-1
 	addpath(fpath{k});
 end
 addpath(genpath(fpath{numel(fpath)}));
-clear fpath
+clear fpath k
 
 % Load structural data
 load(fullfile(path{4}, 'sc90.mat'));
@@ -46,13 +46,7 @@ distType = 'cosine';	% for measuring phase: cosine or exponential
 compressType = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
 
 % File to save
-if strcmpi(compressType, 'eigenvector')
-	fileName = 'LEICA90_CIC';
-elseif strcmpi(compressType, 'average')
-	fileName = 'MICA90_CIC';
-elseif strcmpi(compressType, 'none')
-	fileName = 'ICA90_CIC';
-end
+fileName = 'ZICA90_CIC';
 fList = dir(fullfile(path{6}, strcat(fileName, '_*')));	% Get file list
 nIter = numel(fList); clear fList						% Find number of previous iterations
 fileName = strcat(fileName, '_Iteration', num2str(nIter)); clear nIter	% Edit fileName
@@ -102,7 +96,6 @@ for k = 1:nFiles
 	
 	% Convert LR-symmetric to LR-mirrored ordering
 	subjectBOLD(:,:,k) = LR_version_symm(subjectBOLD(:,:,k));
-	
 end
 clear D ans k loadDirectory loadFiles nFiles fList
 
@@ -157,6 +150,15 @@ k = 2;							% 2nd order butterworth filter
 [bfilt,afilt] = butter(k,Wn);	% construct the filter
 clear fnq flp fhi Wn k
 
+% Filter BOLD signal
+for s = 1:sum(N.subjects)
+	subjectBOLD(:,:,s) = detrend(demean(squeeze(subjectBOLD(:,:,s)))')';
+	subjectBOLD(:,:,s) = filtfilt(bfilt,afilt, squeeze(subjectBOLD(:,:,s))')';
+end
+
+% z-score filtered BOLD signals
+subjectZ = zscore(subjectBOLD, 0, 2);
+
 % Indices for vectorizing lower triangle
 Isubdiag = find(tril(ones(N.ROI),-1));
 
@@ -171,118 +173,52 @@ N.fig = 1;
 
 % Preallocate data arrays
 TS.BOLD = cell(max(N.subjects), N.conditions);
+TS.Z = cell(max(N.subjects), N.conditions);
 FC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);
 
 % Separate time series and FC matrix by subject & by condition
 for c = 1:N.conditions
 	ts = subjectBOLD(:,:,logical(I{:,c}));
+	tz = subjectZ(:,:,logical(I{:,c}));
 	for s = 1:N.subjects(c)
 		TS.BOLD{s,c} = squeeze(ts(:,:,s)); TS.BOLD{s,c} = TS.BOLD{s,c}(:, 1:T.scan);
+		TS.Z{s,c} = squeeze(tz(:,:,s)); TS.Z{s,c} = TS.Z{s,c}(:, 1:T.scan);
 		FC(:,:,s,c) = corr(TS.BOLD{s, c}');
 	end
 end
-clear c s ts subjectBOLD
+clear c s ts tz subjectBOLD subjectZ
 
-% Preallocate storage arrays
-TS.PH = cell(max(N.subjects), N.conditions);
 
-% Compute BOLD phase and z-score
-disp('Computing phase of BOLD signal');
+
+%% Compute ICs from BOLD signal
+
+% Concatenate z-scored signals
+Z = cell(1,N.conditions);
 for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		[TS.PH{s,c}, TS.BOLD{s,c}] = regionPhase(TS.BOLD{s,c}, bfilt, afilt);
-	end
+	Z{c} = cell2mat(TS.Z(:,c)');
 end
-clear s c
-
-% Preallocate storage arrays
-switch compressType
-	case {'LEICA', 'Eigenvector'}
-		dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
-	case 'average'
-		dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
-	otherwise
-		dFC.concat = zeros(length(Isubdiag), T.scan*sum(N.subjects));
-end
-
-% Preallocate variables to save FC patterns and associated information
-T.index = zeros(2, T.scan*sum(N.subjects));	% vector with subject nr and task at each t
-t = 0;									% Index of time (starts at 0, updated until N.subjects*T.scan)
-
-% Compute instantaneous FC (BOLD Phase Synchrony) and leading eigenvector (V1) for each time point
-for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		
-		% Index subject, condition of current dFC sequence
-		t = t+1 : t+T.scan;
-		T.index(:,t) = repmat([s c]', 1,T.scan);
-		
-		% Extract dFC
-		dFC.concat(:,t) = LEdFC(TS.PH{s,c}, 'distType',distType, 'compressType',compressType, 'nROI',N.ROI, 'T',T.scan);
-		t = t(end);
-	end
-end
-
-% Clear dud variables
-clear afilt bfilt c s t m n iPH iZ V1 t_all Isubdiag sc90
-
-% Preallocate storage arrays for condition-wise dFC, subject-wise dFC
-dFC.cond = cell(1, N.conditions);
-dFC.subj = cell(max(N.subjects), N.conditions);
-
-% Segment dFC
-for c = 1:N.conditions
-	I = T.index(2,:) == c;
-	dFC.cond{c} = dFC.concat(:,I);
-	for s = 1:N.subjects(c)
-		I = (T.index(2,:) == c & T.index(1,:) == s);
-		dFC.subj{s,c} = dFC.concat(:,I);
-	end
-end
-clear I s c
-
-% Compute dFC frequency spectra
-L = sum(N.subjects)*T.scan;
-dFCspect.concat = fft(dFC.concat')';
-dFCspect.concat = dFCspect.concat(:, 1:round(L/2+1));
-dFCspect.concat(:, 2:end-1) = 2*dFCspect.concat(:, 2:end-1);
-for c = 1:N.conditions
-	L = N.subjects(c)*T.scan;
-	dFCspect.cond{c} = fft(dFC.cond{c}')';
-	dFCspect.cond{c} = dFCspect.cond{c}(:, 1:round(L/2+1));
-	dFCspect.cond{c}(:, 2:end-1) = 2*dFCspect.cond{c}(:, 2:end-1);
-	for s = 1:N.subjects(c)
-		dFCspect.subj{s,c} = fft(dFC.subj{s,c}')';
-		dFCspect.subj{s,c} = dFCspect.subj{s,c}(:, 1:round(T.scan/2+1));
-		dFCspect.subj{s,c}(:, 2:end-1) = 2*dFCspect.subj{s,c}(:, 2:end-1);
-	end
-end
-clear c s L
-
-
-
-%% Compute ICs from dFC
+Z = cell2mat(Z);
 
 % Extract number of assemblies using Marcenko-Pastur distribution
-N.IC = NumberofIC(dFC.concat);
+N.IC = NumberofIC(Z);
 
 % Use PCA to estimate amount of variance captured with N.IC
-[~,~,~,~,explained,~] = pca(dFC.concat');
+[~,~,~,~,explained,~] = pca(Z');
 explainedVar = sum(explained(N.IC+1:end));
 
 % Compute assembly activity timecourses and memberships
 disp('Processing the ICs from BOLD data');
-[activities.concat, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
+[activities.concat, memberships, W] = fastica(Z, 'numOfIC', N.IC, 'verbose','off');
 
 % Separate assembly activations by condition & subject
+Z = cell(1, N.conditions);
 activities.cond = cell(1, N.conditions);
 activities.subj = cell(max(N.subjects), N.conditions);
 for c = 1:N.conditions
-	I = T.index(2,:) == c;
-	activities.cond{c} = activities.concat(:,I);
+	Z{c} = cell2mat(TS.Z(:,c)');
+	activities.cond{c} = W*Z{c};
 	for s = 1:N.subjects(c)
-		I = (T.index(2,:) == c & T.index(1,:) == s);
-		activities.subj{s,c} = activities.concat(:,I);
+		activities.subj{s,c} = W*TS.Z{s,c};
 	end
 end
 clear I s c
@@ -374,8 +310,8 @@ for t = 1:numel(ttype)
 	disp(['Running ', ttype{t}, ' tests on activations.']);
 	
 	% Compare activations between conditions
-	sig.AAL.TS{t} = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'p',pval.target, 'testtype',ttype{t});						% Compare ROI time series
-	sig.IC.TS{t} = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
+	sig.AAL{t} = robustTests(Z{1}, Z{2}, N.ROI, 'p',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	sig.IC{t} = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
 	
 	% Average activation magnitude(s)
 	con = activities.av.subj(:,:,1); con = con(isfinite(con));
@@ -392,7 +328,7 @@ for t = 1:numel(ttype)
 	pat = activities.sd.subj(:,:,2); pat = pat(isfinite(pat));
 	sig.sd{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
 end
-clear con pat t
+clear con pat t Z
 
 % Subject metastabilities
 disp('Running permutation tests on metastability.');

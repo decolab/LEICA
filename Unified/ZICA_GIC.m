@@ -49,13 +49,7 @@ phaseType = 'cosine';	% for measuring phase: cosine or exponential
 compressType = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
 
 % File to save
-if strcmpi(compressType, 'eigenvector')
-	fileName = 'LEICA90_GIC';
-elseif strcmpi(compressType, 'average')
-	fileName = 'MICA90_GIC';
-elseif strcmpi(compressType, 'none')
-	fileName = 'ICA90_GIC';
-end
+fileName = 'ZICA90_GIC';
 fList = dir(fullfile(path{6}, strcat(fileName, '_*')));	% Get file list
 nIter = numel(fList); clear fList						% Find number of previous iterations
 fileName = strcat(fileName, '_Iteration', num2str(nIter)); clear nIter	% Edit fileName
@@ -160,6 +154,15 @@ k = 2;							% 2nd order butterworth filter
 [bfilt,afilt] = butter(k,Wn);	% construct the filter
 clear fnq flp fhi Wn k
 
+% Filter BOLD signal
+for s = 1:sum(N.subjects)
+	subjectBOLD(:,:,s) = detrend(demean(squeeze(subjectBOLD(:,:,s)))')';
+	subjectBOLD(:,:,s) = filtfilt(bfilt,afilt, squeeze(subjectBOLD(:,:,s))')';
+end
+
+% z-score filtered BOLD signals
+subjectZ = zscore(subjectBOLD, 0, 2);
+
 % Indices for vectorizing lower triangle
 Isubdiag = find(tril(ones(N.ROI),-1));
 
@@ -174,117 +177,20 @@ N.fig = 1;
 
 % Preallocate data arrays
 TS.BOLD = cell(max(N.subjects), N.conditions);
+TS.Z = cell(max(N.subjects), N.conditions);
 FC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);
 
 % Separate time series and FC matrix by subject & by condition
 for c = 1:N.conditions
 	ts = subjectBOLD(:,:,logical(I{:,c}));
+	tz = subjectZ(:,:,logical(I{:,c}));
 	for s = 1:N.subjects(c)
-		TS.BOLD{s,c} = squeeze(ts(:,:,s));
-		TS.BOLD{s,c} = TS.BOLD{s,c}(:, 1:T.scan);
+		TS.BOLD{s,c} = squeeze(ts(:,:,s)); TS.BOLD{s,c} = TS.BOLD{s,c}(:, 1:T.scan);
+		TS.Z{s,c} = squeeze(tz(:,:,s)); TS.Z{s,c} = TS.Z{s,c}(:, 1:T.scan);
 		FC(:,:,s,c) = corr(TS.BOLD{s, c}');
 	end
 end
-clear c s ts subjectBOLD
-
-% Preallocate storage arrays
-TS.PH = cell(max(N.subjects), N.conditions);
-
-% Compute BOLD phase and z-score
-disp('Computing phase of BOLD signal');
-for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		[TS.PH{s,c}, TS.BOLD{s,c}] = regionPhase(TS.BOLD{s,c}, bfilt, afilt);
-	end
-end
-clear s c
-
-% Preallocate storage arrays
-if strcmpi(compressType, 'LEICA') ||  strcmpi(compressType, 'Eigenvector')	% leading eigenvector
-	dFC.concat = zeros(T.scan*sum(N.subjects), N.ROI);
-elseif strcmpi(compressType, 'average')	% average activity
-	dFC.concat = zeros(T.scan*sum(N.subjects), N.ROI);
-else	% vectorized synchrony data
-	dFC.concat = zeros(T.scan*sum(N.subjects), length(Isubdiag));
-end
-
-% Preallocate variables to save FC patterns and associated information
-T.index = zeros(2, T.scan*sum(N.subjects));	% vector with subject nr and task at each t
-t_all = 0;									% Index of time (starts at 0, updated until N.subjects*T.scan)
-
-% Compute instantaneous FC (BOLD Phase Synchrony) and leading eigenvector (V1) for each time point
-for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		for t = 1:T.scan
-			
-			% Update time
-			t_all = t_all+1;
-			
-			% Compute instantaneous phase synchrony FC
-			iPH = zeros(N.ROI, N.ROI);
-			if strcmpi(phaseType, 'cosine')
-				for n = 1:N.ROI
-					for m = 1:N.ROI
-						iPH(n,m) = cos(TS.PH{s,c}(n,t) - TS.PH{s,c}(m,t));
-					end
-				end
-			elseif strcmpi(phaseType, 'exponential')
-				for n = 1:N.ROI
-					for m = 1:N.ROI
-						iPH(n,m) = exp(-3*adif(TS.PH{s,c}(n,t), TS.PH{s,c}(m,t))); 
-					end
-				end
-			end
-			
-			% Extract leading eigenvector
-			if strcmpi(compressType, 'eigenvector')
-				[dFC.concat(t_all,:), ~] = eigs(iPH,1);
-			elseif strcmpi(compressType, 'average')
-				dFC.concat(t_all,:) = mean(iPH);
-			else
-				dFC.concat(t_all,:) = iPH(Isubdiag);
-			end
-			T.index(:,t_all) = [s c]';	% Information that at t_all, V1 corresponds to subject s in a given task
-		end
-	end
-end
-dFC.concat = dFC.concat';
-
-% Clear dud variables
-clear afilt bfilt c s t m n iPH iZ V1 t_all Isubdiag sc90
-
-% Preallocate storage arrays for condition-wise dFC, subject-wise dFC
-dFC.cond = cell(1, N.conditions);
-dFC.subj = cell(max(N.subjects), N.conditions);
-
-% Segment dFC
-for c = 1:N.conditions
-	I = T.index(2,:) == c;
-	dFC.cond{c} = dFC.concat(:,I);
-	for s = 1:N.subjects(c)
-		I = (T.index(2,:) == c & T.index(1,:) == s);
-		dFC.subj{s,c} = dFC.concat(:,I);
-	end
-end
-clear I s c
-
-% Compute dFC frequency spectra
-L = sum(N.subjects)*T.scan;
-dFCspect.concat = fft(dFC.concat')';
-dFCspect.concat = dFCspect.concat(:, 1:round(L/2+1));
-dFCspect.concat(:, 2:end-1) = 2*dFCspect.concat(:, 2:end-1);
-for c = 1:N.conditions
-	L = N.subjects(c)*T.scan;
-	dFCspect.cond{c} = fft(dFC.cond{c}')';
-	dFCspect.cond{c} = dFCspect.cond{c}(:, 1:round(L/2+1));
-	dFCspect.cond{c}(:, 2:end-1) = 2*dFCspect.cond{c}(:, 2:end-1);
-	for s = 1:N.subjects(c)
-		dFCspect.subj{s,c} = fft(dFC.subj{s,c}')';
-		dFCspect.subj{s,c} = dFCspect.subj{s,c}(:, 1:round(T.scan/2+1));
-		dFCspect.subj{s,c}(:, 2:end-1) = 2*dFCspect.subj{s,c}(:, 2:end-1);
-	end
-end
-clear c s L
+clear c s ts tz subjectBOLD subjectZ
 
 
 
@@ -295,12 +201,14 @@ F(N.fig) = figure;
 N.fig = N.fig + 1;
 
 % Extract number of assemblies using Marcenko-Pastur distribution
+Z = cell(1,N.conditions);
 N.IC = nan(N.conditions, 1);
 explained = cell(N.conditions, 1);
 tVar = nan(N.conditions, 1);
 for c = 1:N.conditions
-	N.IC(c) = NumberofIC(dFC.cond{c});				% find number of components
-	[~,~,~,~,explained{c},~] = pca(dFC.cond{c}');	% find percentage of explained variance per component
+	Z{c} = cell2mat(TS.Z(:,c)');			% Get group-level z-score
+	N.IC(c) = NumberofIC(Z{c});				% find number of components
+	[~,~,~,~,explained{c},~] = pca(Z{c}');	% find percentage of explained variance per component
 	tVar(c) = sum(explained{c}(1:N.IC(c)));			% amount of variance captured with N.IC
 
 	subplot(1, N.conditions, c);
@@ -320,7 +228,7 @@ W = cell(N.conditions, 1);
 ICs = cell(N.conditions, 1);
 for c = 1:N.conditions
 	disp(['Processing the ICs of group ', num2str(c), ' from BOLD data']);
-	[~, memberships{c}, W{c}] = fastica(dFC.cond{c}, 'numOfIC', N.IC(c), 'verbose','off');
+	[~, memberships{c}, W{c}] = fastica(Z{c}, 'numOfIC', N.IC(c), 'verbose','off');
 	
 	% Normalize membership weights
 	for i = 1:N.IC(c)
@@ -342,11 +250,9 @@ N.pairings = size(pairings, 1);
 activities.cond = cell(N.conditions, N.pairings-N.conditions);
 activities.subj = cell(max(N.subjects), N.conditions, N.pairings-N.conditions);
 for p = 1:N.pairings
-	activities.cond{pairings(p,1), pairings(p,2)} = W{pairings(p,1)}*dFC.cond{pairings(p,2)};
+	activities.cond{pairings(p,1), pairings(p,2)} = W{pairings(p,1)}*Z{pairings(p,2)};
 	for s = 1:N.subjects(pairings(p,2))
-		t = T.index(1,(T.index(2,:) == pairings(p,2)));
-		I = (t == s);
-		activities.subj{s,pairings(p,1),pairings(p,2)} = activities.cond{pairings(p,1),pairings(p,2)}(:,I);
+		activities.subj{s,pairings(p,1),pairings(p,2)} = W{pairings(p,1)}*TS.Z{s,pairings(p,2)};
 	end
 end
 clear I k t c s i p
@@ -385,8 +291,10 @@ ttype = {'kstest2', 'permutation'};
 
 % Compare activations between conditions.  The second index c indicates which IC space is used
 for t = 1:numel(ttype)
-	sig.AAL(t) = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	disp(['Running ', ttype{t}, ' test on activations in AAL space.']);
+	sig.AAL(t) = robustTests(Z{1}, Z{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
 	for c = 1:N.conditions
+		disp(['Running ', ttype{t}, ' test on condition ', num2str(c), ' IC space activations.']);
 		sig.IC(t,c) = robustTests(activities.cond{c,1}, activities.cond{c,2}, N.IC(c), 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
 	end
 end
@@ -395,11 +303,13 @@ clear c t
 % Test activation metrics 
 for c = 1:N.conditions
 	% Subject metastabilities
+	disp(['Running permutation test on condition ', num2str(c), ' IC space metastability.']);
 	con = activities.metastable.subj(:,c,1); con = con(isfinite(con));
 	pat = activities.metastable.subj(:,c,2); pat = pat(isfinite(pat));
 	[sig.metastable.p(c), ~, sig.metastable.effsize(c)] = permutationTest(con, pat, 10000);
 	
 	% Subject entropies
+	disp(['Running permutation test on condition ', num2str(c), ' IC space entropy.']);
 	con = activities.entro(:,c,1); con = con(isfinite(con));
 	pat = activities.entro(:,c,2); pat = pat(isfinite(pat));
 	[sig.entro.p(c), ~, sig.entro.effsize(c)] = permutationTest(con, pat, 10000);
