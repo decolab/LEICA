@@ -46,12 +46,19 @@ distType = 'cosine';	% for measuring phase: cosine or exponential
 compressType = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
 
 % File to save
-if strcmpi(compressType, 'eigenvector')
-	fileName = 'LEICA90_CIC';
-elseif strcmpi(compressType, 'average')
-	fileName = 'MICA90_CIC';
-elseif strcmpi(compressType, 'none')
-	fileName = 'ICA90_CIC';
+switch compressType
+	case {'LEICA', 'eigenvector'}
+		fileName = 'LEICA90_CIC';
+	case 'average'
+		fileName = 'MICA90_CIC';
+	otherwise
+		fileName = 'ICA90_CIC';
+end
+switch distType
+	case 'cosine'
+		fileName = strcat(fileName, '_COS');
+	case 'exponential'
+		fileName = strcat(fileName, '_EXP');
 end
 fList = dir(fullfile(path{6}, strcat(fileName, '_*')));	% Get file list
 nIter = numel(fList); clear fList						% Find number of previous iterations
@@ -197,7 +204,7 @@ clear s c
 
 % Preallocate storage arrays
 switch compressType
-	case {'LEICA', 'Eigenvector'}
+	case {'LEICA', 'eigenvector'}
 		dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
 	case 'average'
 		dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
@@ -374,23 +381,23 @@ for t = 1:numel(ttype)
 	disp(['Running ', ttype{t}, ' tests on activations.']);
 	
 	% Compare activations between conditions
-	sig.AAL.TS{t} = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'p',pval.target, 'testtype',ttype{t});						% Compare ROI time series
-	sig.IC.TS{t} = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
+	sig.AAL.TS(t) = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'p',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	sig.IC.TS(t) = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
 	
 	% Average activation magnitude(s)
 	con = activities.av.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.av.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.av{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
+	sig.av(t) = robustTests(con, pat, N.IC, 'exact',true, 'p',pval.target, 'testtype',ttype{t});
 
 	% Activation medians(s)
 	con = activities.md.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.md.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.md{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
+	sig.md(t) = robustTests(con, pat, N.IC, 'exact',true, 'p',pval.target, 'testtype',ttype{t});
 
 	% Activation standard deviations(s)
 	con = activities.sd.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.sd.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.sd{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
+	sig.sd(t) = robustTests(con, pat, N.IC, 'exact',true, 'p',pval.target, 'testtype',ttype{t});
 end
 clear con pat t
 

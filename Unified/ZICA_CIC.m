@@ -1,4 +1,4 @@
-%% LEICA Extraction of Network States
+%% ZICA Extraction of Network States
 %	This script extracts and transforms neuroimaging data for ICA-based
 % comparisons of the network states.  The current script only computes
 % phase-based synchrony measures.  It is possible to compute synchrony
@@ -172,8 +172,8 @@ co = HShannon_kNN_k_initialization(1);
 N.fig = 1;
 
 % Preallocate data arrays
-TS.BOLD = cell(max(N.subjects), N.conditions);
-TS.Z = cell(max(N.subjects), N.conditions);
+BOLD = cell(max(N.subjects), N.conditions);
+Z.subj = cell(max(N.subjects), N.conditions);
 FC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);
 
 % Separate time series and FC matrix by subject & by condition
@@ -181,9 +181,9 @@ for c = 1:N.conditions
 	ts = subjectBOLD(:,:,logical(I{:,c}));
 	tz = subjectZ(:,:,logical(I{:,c}));
 	for s = 1:N.subjects(c)
-		TS.BOLD{s,c} = squeeze(ts(:,:,s)); TS.BOLD{s,c} = TS.BOLD{s,c}(:, 1:T.scan);
-		TS.Z{s,c} = squeeze(tz(:,:,s)); TS.Z{s,c} = TS.Z{s,c}(:, 1:T.scan);
-		FC(:,:,s,c) = corr(TS.BOLD{s, c}');
+		BOLD{s,c} = squeeze(ts(:,:,s)); BOLD{s,c} = BOLD{s,c}(:, 1:T.scan);
+		Z.subj{s,c} = squeeze(tz(:,:,s)); Z.subj{s,c} = Z.subj{s,c}(:, 1:T.scan);
+		FC(:,:,s,c) = corr(BOLD{s, c}');
 	end
 end
 clear c s ts tz subjectBOLD subjectZ
@@ -193,32 +193,30 @@ clear c s ts tz subjectBOLD subjectZ
 %% Compute ICs from BOLD signal
 
 % Concatenate z-scored signals
-Z = cell(1,N.conditions);
+Z.cond = cell(1,N.conditions);
 for c = 1:N.conditions
-	Z{c} = cell2mat(TS.Z(:,c)');
+	Z.cond{c} = cell2mat(Z.subj(:,c)');
 end
-Z = cell2mat(Z);
+Z.concat = cell2mat(Z.cond);
 
 % Extract number of assemblies using Marcenko-Pastur distribution
-N.IC = NumberofIC(Z);
+N.IC = NumberofIC(Z.concat);
 
 % Use PCA to estimate amount of variance captured with N.IC
-[~,~,~,~,explained,~] = pca(Z');
+[~,~,~,~,explained,~] = pca(Z.concat');
 explainedVar = sum(explained(N.IC+1:end));
 
 % Compute assembly activity timecourses and memberships
 disp('Processing the ICs from BOLD data');
-[activities.concat, memberships, W] = fastica(Z, 'numOfIC', N.IC, 'verbose','off');
+[activities.concat, memberships, W] = fastica(Z.concat, 'numOfIC', N.IC, 'verbose','off');
 
 % Separate assembly activations by condition & subject
-Z = cell(1, N.conditions);
 activities.cond = cell(1, N.conditions);
 activities.subj = cell(max(N.subjects), N.conditions);
 for c = 1:N.conditions
-	Z{c} = cell2mat(TS.Z(:,c)');
-	activities.cond{c} = W*Z{c};
+	activities.cond{c} = W*Z.cond{c};
 	for s = 1:N.subjects(c)
-		activities.subj{s,c} = W*TS.Z{s,c};
+		activities.subj{s,c} = W*Z.subj{s,c};
 	end
 end
 clear I s c
@@ -310,25 +308,25 @@ for t = 1:numel(ttype)
 	disp(['Running ', ttype{t}, ' tests on activations.']);
 	
 	% Compare activations between conditions
-	sig.AAL{t} = robustTests(Z{1}, Z{2}, N.ROI, 'p',pval.target, 'testtype',ttype{t});						% Compare ROI time series
-	sig.IC{t} = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
+	sig.AAL(t) = robustTests(Z.cond{1}, Z.cond{2}, N.ROI, 'p',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	sig.IC(t) = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
 	
 	% Average activation magnitude(s)
 	con = activities.av.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.av.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.av{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
+	sig.av(t) = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
 
 	% Activation medians(s)
 	con = activities.md.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.md.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.md{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
+	sig.md(t) = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
 
 	% Activation standard deviations(s)
 	con = activities.sd.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.sd.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.sd{t} = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
+	sig.sd(t) = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
 end
-clear con pat t Z
+clear con pat t
 
 % Subject metastabilities
 disp('Running permutation tests on metastability.');

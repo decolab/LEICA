@@ -176,8 +176,8 @@ co = HShannon_kNN_k_initialization(1);
 N.fig = 1;
 
 % Preallocate data arrays
-TS.BOLD = cell(max(N.subjects), N.conditions);
-TS.Z = cell(max(N.subjects), N.conditions);
+BOLD = cell(max(N.subjects), N.conditions);
+Z.subj = cell(max(N.subjects), N.conditions);
 FC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);
 
 % Separate time series and FC matrix by subject & by condition
@@ -185,9 +185,9 @@ for c = 1:N.conditions
 	ts = subjectBOLD(:,:,logical(I{:,c}));
 	tz = subjectZ(:,:,logical(I{:,c}));
 	for s = 1:N.subjects(c)
-		TS.BOLD{s,c} = squeeze(ts(:,:,s)); TS.BOLD{s,c} = TS.BOLD{s,c}(:, 1:T.scan);
-		TS.Z{s,c} = squeeze(tz(:,:,s)); TS.Z{s,c} = TS.Z{s,c}(:, 1:T.scan);
-		FC(:,:,s,c) = corr(TS.BOLD{s, c}');
+		BOLD{s,c} = squeeze(ts(:,:,s)); BOLD{s,c} = BOLD{s,c}(:, 1:T.scan);
+		Z.subj{s,c} = squeeze(tz(:,:,s)); Z.subj{s,c} = Z.subj{s,c}(:, 1:T.scan);
+		FC(:,:,s,c) = corr(BOLD{s, c}');
 	end
 end
 clear c s ts tz subjectBOLD subjectZ
@@ -201,15 +201,15 @@ F(N.fig) = figure;
 N.fig = N.fig + 1;
 
 % Extract number of assemblies using Marcenko-Pastur distribution
-Z = cell(1,N.conditions);
+Z.cond = cell(1,N.conditions);
 N.IC = nan(N.conditions, 1);
 explained = cell(N.conditions, 1);
 tVar = nan(N.conditions, 1);
 for c = 1:N.conditions
-	Z{c} = cell2mat(TS.Z(:,c)');			% Get group-level z-score
-	N.IC(c) = NumberofIC(Z{c});				% find number of components
-	[~,~,~,~,explained{c},~] = pca(Z{c}');	% find percentage of explained variance per component
-	tVar(c) = sum(explained{c}(1:N.IC(c)));			% amount of variance captured with N.IC
+	Z.cond{c} = cell2mat(Z.subj(:,c)');			% Get group-level z-score
+	N.IC(c) = NumberofIC(Z.cond{c});			% find number of components
+	[~,~,~,~,explained{c},~] = pca(Z.cond{c}');	% find percentage of explained variance per component
+	tVar(c) = sum(explained{c}(1:N.IC(c)));		% amount of variance captured with N.IC
 
 	subplot(1, N.conditions, c);
 	plot(1:numel(explained{c}), explained{c}, ':ob'); hold on;
@@ -228,7 +228,7 @@ W = cell(N.conditions, 1);
 ICs = cell(N.conditions, 1);
 for c = 1:N.conditions
 	disp(['Processing the ICs of group ', num2str(c), ' from BOLD data']);
-	[~, memberships{c}, W{c}] = fastica(Z{c}, 'numOfIC', N.IC(c), 'verbose','off');
+	[~, memberships{c}, W{c}] = fastica(Z.cond{c}, 'numOfIC', N.IC(c), 'verbose','off');
 	
 	% Normalize membership weights
 	for i = 1:N.IC(c)
@@ -250,9 +250,9 @@ N.pairings = size(pairings, 1);
 activities.cond = cell(N.conditions, N.pairings-N.conditions);
 activities.subj = cell(max(N.subjects), N.conditions, N.pairings-N.conditions);
 for p = 1:N.pairings
-	activities.cond{pairings(p,1), pairings(p,2)} = W{pairings(p,1)}*Z{pairings(p,2)};
+	activities.cond{pairings(p,1), pairings(p,2)} = W{pairings(p,1)}*Z.cond{pairings(p,2)};
 	for s = 1:N.subjects(pairings(p,2))
-		activities.subj{s,pairings(p,1),pairings(p,2)} = W{pairings(p,1)}*TS.Z{s,pairings(p,2)};
+		activities.subj{s,pairings(p,1),pairings(p,2)} = W{pairings(p,1)}*Z.subj{s,pairings(p,2)};
 	end
 end
 clear I k t c s i p
@@ -292,7 +292,7 @@ ttype = {'kstest2', 'permutation'};
 % Compare activations between conditions.  The second index c indicates which IC space is used
 for t = 1:numel(ttype)
 	disp(['Running ', ttype{t}, ' test on activations in AAL space.']);
-	sig.AAL(t) = robustTests(Z{1}, Z{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	sig.AAL(t) = robustTests(Z.cond{1}, Z.cond{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
 	for c = 1:N.conditions
 		disp(['Running ', ttype{t}, ' test on condition ', num2str(c), ' IC space activations.']);
 		sig.IC(t,c) = robustTests(activities.cond{c,1}, activities.cond{c,2}, N.IC(c), 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
@@ -306,13 +306,13 @@ for c = 1:N.conditions
 	disp(['Running permutation test on condition ', num2str(c), ' IC space metastability.']);
 	con = activities.metastable.subj(:,c,1); con = con(isfinite(con));
 	pat = activities.metastable.subj(:,c,2); pat = pat(isfinite(pat));
-	[sig.metastable.p(c), ~, sig.metastable.effsize(c)] = permutationTest(con, pat, 10000);
+	[sig.metastable(c).p, ~, sig.metastable(c).effsize] = permutationTest(con, pat, 10000);
 	
 	% Subject entropies
 	disp(['Running permutation test on condition ', num2str(c), ' IC space entropy.']);
 	con = activities.entro(:,c,1); con = con(isfinite(con));
 	pat = activities.entro(:,c,2); pat = pat(isfinite(pat));
-	[sig.entro.p(c), ~, sig.entro.effsize(c)] = permutationTest(con, pat, 10000);
+	[sig.entro(c).p, ~, sig.entro(c).effsize] = permutationTest(con, pat, 10000);
 end
 clear c con pat
 

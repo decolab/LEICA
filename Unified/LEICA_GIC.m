@@ -45,16 +45,23 @@ clear fpath
 load(fullfile(path{4}, 'sc90.mat'));
 
 % Set methods
-phaseType = 'cosine';	% for measuring phase: cosine or exponential
+distType = 'cosine';	% for measuring phase: cosine or exponential
 compressType = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
 
 % File to save
-if strcmpi(compressType, 'eigenvector')
-	fileName = 'LEICA90_GIC';
-elseif strcmpi(compressType, 'average')
-	fileName = 'MICA90_GIC';
-elseif strcmpi(compressType, 'none')
-	fileName = 'ICA90_GIC';
+switch compressType
+	case {'LEICA', 'eigenvector'}
+		fileName = 'LEICA90_CIC';
+	case 'average'
+		fileName = 'MICA90_CIC';
+	otherwise
+		fileName = 'ICA90_CIC';
+end
+switch distType
+	case 'cosine'
+		fileName = strcat(fileName, '_COS');
+	case 'exponential'
+		fileName = strcat(fileName, '_EXP');
 end
 fList = dir(fullfile(path{6}, strcat(fileName, '_*')));	% Get file list
 nIter = numel(fList); clear fList						% Find number of previous iterations
@@ -200,57 +207,32 @@ end
 clear s c
 
 % Preallocate storage arrays
-if strcmpi(compressType, 'LEICA') ||  strcmpi(compressType, 'Eigenvector')	% leading eigenvector
-	dFC.concat = zeros(T.scan*sum(N.subjects), N.ROI);
-elseif strcmpi(compressType, 'average')	% average activity
-	dFC.concat = zeros(T.scan*sum(N.subjects), N.ROI);
-else	% vectorized synchrony data
-	dFC.concat = zeros(T.scan*sum(N.subjects), length(Isubdiag));
+switch compressType
+	case {'LEICA', 'eigenvector'}
+		dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
+	case 'average'
+		dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
+	otherwise
+		dFC.concat = zeros(length(Isubdiag), T.scan*sum(N.subjects));
 end
 
 % Preallocate variables to save FC patterns and associated information
 T.index = zeros(2, T.scan*sum(N.subjects));	% vector with subject nr and task at each t
-t_all = 0;									% Index of time (starts at 0, updated until N.subjects*T.scan)
+t = 0;
 
 % Compute instantaneous FC (BOLD Phase Synchrony) and leading eigenvector (V1) for each time point
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
-		for t = 1:T.scan
-			
-			% Update time
-			t_all = t_all+1;
-			
-			% Compute instantaneous phase synchrony FC
-			iPH = zeros(N.ROI, N.ROI);
-			if strcmpi(phaseType, 'cosine')
-				for n = 1:N.ROI
-					for m = 1:N.ROI
-						iPH(n,m) = cos(TS.PH{s,c}(n,t) - TS.PH{s,c}(m,t));
-					end
-				end
-			elseif strcmpi(phaseType, 'exponential')
-				for n = 1:N.ROI
-					for m = 1:N.ROI
-						iPH(n,m) = exp(-3*adif(TS.PH{s,c}(n,t), TS.PH{s,c}(m,t))); 
-					end
-				end
-			end
-			
-			% Extract leading eigenvector
-			if strcmpi(compressType, 'eigenvector')
-				[dFC.concat(t_all,:), ~] = eigs(iPH,1);
-			elseif strcmpi(compressType, 'average')
-				dFC.concat(t_all,:) = mean(iPH);
-			else
-				dFC.concat(t_all,:) = iPH(Isubdiag);
-			end
-			T.index(:,t_all) = [s c]';	% Information that at t_all, V1 corresponds to subject s in a given task
-		end
+		
+		% Index subject, condition of current dFC sequence
+		t = t+1 : t+T.scan;
+		T.index(:,t) = repmat([s c]', 1,T.scan);
+		
+		% Extract dFC
+		dFC.concat(:,t) = LEdFC(TS.PH{s,c}, 'distType',distType, 'compressType',compressType, 'nROI',N.ROI, 'T',T.scan);
+		t = t(end);
 	end
 end
-dFC.concat = dFC.concat';
-
-% Clear dud variables
 clear afilt bfilt c s t m n iPH iZ V1 t_all Isubdiag sc90
 
 % Preallocate storage arrays for condition-wise dFC, subject-wise dFC
@@ -397,12 +379,12 @@ for c = 1:N.conditions
 	% Subject metastabilities
 	con = activities.metastable.subj(:,c,1); con = con(isfinite(con));
 	pat = activities.metastable.subj(:,c,2); pat = pat(isfinite(pat));
-	[sig.metastable.p(c), ~, sig.metastable.effsize(c)] = permutationTest(con, pat, 10000);
+	[sig.metastable(c).p, ~, sig.metastable(c).effsize] = permutationTest(con, pat, 10000);
 	
 	% Subject entropies
 	con = activities.entro(:,c,1); con = con(isfinite(con));
 	pat = activities.entro(:,c,2); pat = pat(isfinite(pat));
-	[sig.entro.p(c), ~, sig.entro.effsize(c)] = permutationTest(con, pat, 10000);
+	[sig.entro(c).p, ~, sig.entro(c).effsize] = permutationTest(con, pat, 10000);
 end
 clear c con pat
 
