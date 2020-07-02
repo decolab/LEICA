@@ -171,12 +171,11 @@ co = HShannon_kNN_k_initialization(1);
 % Set figure counter
 N.fig = 1;
 
-% Preallocate data arrays
+% Separate time series and FC matrix by subject & by condition
 BOLD = cell(max(N.subjects), N.conditions);
 Z.subj = cell(max(N.subjects), N.conditions);
+Z.cond = cell(1,N.conditions);
 FC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);
-
-% Separate time series and FC matrix by subject & by condition
 for c = 1:N.conditions
 	ts = subjectBOLD(:,:,logical(I{:,c}));
 	tz = subjectZ(:,:,logical(I{:,c}));
@@ -185,19 +184,14 @@ for c = 1:N.conditions
 		Z.subj{s,c} = squeeze(tz(:,:,s)); Z.subj{s,c} = Z.subj{s,c}(:, 1:T.scan);
 		FC(:,:,s,c) = corr(BOLD{s, c}');
 	end
+	Z.cond{c} = cell2mat(Z.subj(:,c)');
 end
+Z.concat = cell2mat(Z.cond);
 clear c s ts tz subjectBOLD subjectZ
 
 
 
 %% Compute ICs from BOLD signal
-
-% Concatenate z-scored signals
-Z.cond = cell(1,N.conditions);
-for c = 1:N.conditions
-	Z.cond{c} = cell2mat(Z.subj(:,c)');
-end
-Z.concat = cell2mat(Z.cond);
 
 % Extract number of assemblies using Marcenko-Pastur distribution
 N.IC = NumberofIC(Z.concat);
@@ -308,23 +302,24 @@ for t = 1:numel(ttype)
 	disp(['Running ', ttype{t}, ' tests on activations.']);
 	
 	% Compare activations between conditions
-	sig.AAL(t) = robustTests(Z.cond{1}, Z.cond{2}, N.ROI, 'p',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	sig.BOLD(t) = robustTests(cell2mat(BOLD(:,1)'), cell2mat(BOLD(:,2)'), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD time series
+	sig.dFC(t) = robustTests(Z.cond{1}, Z.cond{2}, N.ROI, 'p',pval.target, 'testtype',ttype{t});						% Compare dFC time series
 	sig.IC(t) = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
 	
 	% Average activation magnitude(s)
 	con = activities.av.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.av.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.av(t) = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
+	sig.av(t) = robustTests(con, pat, N.IC, 'exact',true, 'p',pval.target, 'testtype',ttype{t});
 
 	% Activation medians(s)
 	con = activities.md.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.md.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.md(t) = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
+	sig.md(t) = robustTests(con, pat, N.IC, 'exact',true, 'p',pval.target, 'testtype',ttype{t});
 
 	% Activation standard deviations(s)
 	con = activities.sd.subj(:,:,1); con = con(isfinite(con));
 	pat = activities.sd.subj(:,:,2); pat = pat(isfinite(pat));
-	sig.sd(t) = robustTests(con, pat, N.IC, 'p',pval.target, 'testtype',ttype{t});
+	sig.sd(t) = robustTests(con, pat, N.IC, 'exact',true, 'p',pval.target, 'testtype',ttype{t});
 end
 clear con pat t
 
@@ -332,13 +327,13 @@ clear con pat t
 disp('Running permutation tests on metastability.');
 con = metastable.subj{:,'Control'}(isfinite(metastable.subj{:,'Control'}));
 pat = metastable.subj{:,'Patient'}(isfinite(metastable.subj{:,'Patient'}));
-sig.metastable.p = permutationTest(con, pat, 10000, 'sidedness','both');
+[sig.metastable(c).p, ~, sig.metastable(c).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
 
 % Subject entropies
 disp('Running permutation tests on entropy.');
 con = entro.subj{:,'Control'}(isfinite(entro.subj{:,'Control'}));
 pat = entro.subj{:,'Patient'}(isfinite(entro.subj{:,'Patient'}));
-sig.entro.p = permutationTest(con, pat, 10000, 'sidedness','both');
+[sig.entro(c).p, ~, sig.entro(c).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
 
 
 

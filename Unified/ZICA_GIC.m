@@ -39,7 +39,7 @@ for k = 1:numel(fpath)-1
 	addpath(fpath{k});
 end
 addpath(genpath(fpath{numel(fpath)}));
-clear fpath
+clear fpath k
 
 % Load structural data
 load(fullfile(path{4}, 'sc90.mat'));
@@ -292,7 +292,8 @@ ttype = {'kstest2', 'permutation'};
 % Compare activations between conditions.  The second index c indicates which IC space is used
 for t = 1:numel(ttype)
 	disp(['Running ', ttype{t}, ' test on activations in AAL space.']);
-	sig.AAL(t) = robustTests(Z.cond{1}, Z.cond{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	sig.BOLD(t) = robustTests(cell2mat(BOLD(:,1)'), cell2mat(BOLD(:,2)'), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD time series
+	sig.dFC(t) = robustTests(Z.cond{1}, Z.cond{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare dFC time series
 	for c = 1:N.conditions
 		disp(['Running ', ttype{t}, ' test on condition ', num2str(c), ' IC space activations.']);
 		sig.IC(t,c) = robustTests(activities.cond{c,1}, activities.cond{c,2}, N.IC(c), 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series

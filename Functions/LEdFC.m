@@ -6,8 +6,8 @@ function [iFC] = LEdFC(TS, varargin)
 % Set default values
 distType = 'cosine';
 compressType = 'eigenvector';
-nROI = size(TS,1);
-T = size(TS,2);
+nROI = size(TS, 1);
+T = size(TS, 2);
 
 % unpack varagin
 for k = 1:2:length(varargin)
@@ -23,26 +23,27 @@ for k = 1:2:length(varargin)
 	end
 end
 
-% Preallocate storage arrays
-iFC = nan(T, nROI);
-
-% Indices for vectorizing lower triangle of FC matrix
-Isubdiag = find(tril(ones(nROI),-1));
-
 % Compute dFC
 iPH = dFC(TS, 'nROI',nROI, 'T',T, 'distType',distType);
 
 % Compress dFC
-for t = 1:T
-	switch compressType
-		case 'eigenvector'
+switch compressType
+	case {'LEICA', 'eigenvector'}
+		iFC = nan(T, nROI);
+		for t = 1:T
 			[iFC(t,:), ~] = eigs(squeeze(iPH(:,:,t)),1);
-		case 'average'
+		end
+	case 'average'
+		iFC = nan(T, nROI);
+		for t = 1:T
 			iFC(t,:) = mean(squeeze(iPH(:,:,t)));
-		case 'none'
+		end
+	otherwise
+		iFC = nan(T, length(find(tril(ones(nROI),-1))));
+		for t = 1:T
 			d = squeeze(iPH(:,:,t));
-			iFC(t,:) = d(Isubdiag);
-	end
+			iFC(t,:) = d(find(tril(ones(nROI),-1))');
+		end
 end
 
 % Convert dFC matrix to standard format

@@ -35,7 +35,7 @@ for t = 1:T
 		case 'exponential'
 			for n = 1:nROI
 				for m = 1:nROI
-					iPH(n,m,t) = exp(-3*adif(TS(n,t), TS(m,t))); 
+					iPH(n,m,t) = exp(-3*min(abs(TS(n,t)-TS(m,t)), 2*pi-abs(TS(n,t)-TS(m,t)))); 
 				end
 			end
 	end

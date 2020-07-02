@@ -39,23 +39,23 @@ for k = 1:numel(fpath)-1
 	addpath(fpath{k});
 end
 addpath(genpath(fpath{numel(fpath)}));
-clear fpath
+clear fpath k
 
 % Load structural data
 load(fullfile(path{4}, 'sc90.mat'));
 
 % Set methods
 distType = 'cosine';	% for measuring phase: cosine or exponential
-compressType = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
+compressType = 'none';	% for compressing matrix: eigenvector, average, or none
 
 % File to save
 switch compressType
 	case {'LEICA', 'eigenvector'}
-		fileName = 'LEICA90_CIC';
+		fileName = 'LEICA90_GIC';
 	case 'average'
-		fileName = 'MICA90_CIC';
+		fileName = 'MICA90_GIC';
 	otherwise
-		fileName = 'ICA90_CIC';
+		fileName = 'ICA90_GIC';
 end
 switch distType
 	case 'cosine'
@@ -179,38 +179,32 @@ co = HShannon_kNN_k_initialization(1);
 % Set figure counter
 N.fig = 1;
 
-% Preallocate data arrays
-TS.BOLD = cell(max(N.subjects), N.conditions);
-FC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);
-
 % Separate time series and FC matrix by subject & by condition
+BOLD = cell(max(N.subjects), N.conditions);
+FC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);
 for c = 1:N.conditions
 	ts = subjectBOLD(:,:,logical(I{:,c}));
 	for s = 1:N.subjects(c)
-		TS.BOLD{s,c} = squeeze(ts(:,:,s));
-		TS.BOLD{s,c} = TS.BOLD{s,c}(:, 1:T.scan);
-		FC(:,:,s,c) = corr(TS.BOLD{s, c}');
+		BOLD{s,c} = squeeze(ts(:,:,s));
+		BOLD{s,c} = BOLD{s,c}(:, 1:T.scan);
+		FC(:,:,s,c) = corr(BOLD{s, c}');
 	end
 end
 clear c s ts subjectBOLD
 
-% Preallocate storage arrays
-TS.PH = cell(max(N.subjects), N.conditions);
-
 % Compute BOLD phase and z-score
+PH = cell(max(N.subjects), N.conditions);
 disp('Computing phase of BOLD signal');
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
-		[TS.PH{s,c}, TS.BOLD{s,c}] = regionPhase(TS.BOLD{s,c}, bfilt, afilt);
+		[PH{s,c}, BOLD{s,c}] = regionPhase(BOLD{s,c}, bfilt, afilt);
 	end
 end
 clear s c
 
 % Preallocate storage arrays
 switch compressType
-	case {'LEICA', 'eigenvector'}
-		dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
-	case 'average'
+	case {'LEICA', 'eigenvector', 'average'}
 		dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
 	otherwise
 		dFC.concat = zeros(length(Isubdiag), T.scan*sum(N.subjects));
@@ -229,7 +223,7 @@ for c = 1:N.conditions
 		T.index(:,t) = repmat([s c]', 1,T.scan);
 		
 		% Extract dFC
-		dFC.concat(:,t) = LEdFC(TS.PH{s,c}, 'distType',distType, 'compressType',compressType, 'nROI',N.ROI, 'T',T.scan);
+		dFC.concat(:,t) = LEdFC(PH{s,c}, 'distType',distType, 'compressType',compressType, 'nROI',N.ROI, 'T',T.scan);
 		t = t(end);
 	end
 end
@@ -249,6 +243,14 @@ for c = 1:N.conditions
 	end
 end
 clear I s c
+
+
+%% Extract dFC metrics (FCD, frequency spectra)
+
+% Compute FCD
+for c = 1:N.condition
+	FCD.cond{c} = computeFCD(dFC.cond{c}, 'Pearson');
+end
 
 % Compute dFC frequency spectra
 L = sum(N.subjects)*T.scan;
@@ -299,7 +301,6 @@ clear explained tVar p
 % Compute assembly memberships
 memberships = cell(N.conditions, 1);
 W = cell(N.conditions, 1);
-ICs = cell(N.conditions, 1);
 for c = 1:N.conditions
 	disp(['Processing the ICs of group ', num2str(c), ' from BOLD data']);
 	[~, memberships{c}, W{c}] = fastica(dFC.cond{c}, 'numOfIC', N.IC(c), 'verbose','off');
@@ -308,11 +309,17 @@ for c = 1:N.conditions
 	for i = 1:N.IC(c)
 		memberships{c}(:,i) = memberships{c}(:,i)./norm(memberships{c}(:,i));
 	end
-	
-	% Compute IC matrices
-	ICs{c} = nan(N.ROI, N.ROI, N.IC(c));
-	for i = 1:N.IC(c)
-		ICs{c}(:,:,i) = memberships{c}(:,i) * memberships{c}(:,i)';
+end
+
+% Compute membership matrices (only for LEICA or MICA)
+if strcmpi(compressType, {'LEICA', 'eigenvector', 'average'})
+	ICs = cell(N.conditions, 1);
+	for c = 1:N.conditions
+		% Compute IC matrices
+		ICs{c} = nan(N.ROI, N.ROI, N.IC(c));
+		for i = 1:N.IC(c)
+			ICs{c}(:,:,i) = memberships{c}(:,i) * memberships{c}(:,i)';
+		end
 	end
 end
 
@@ -365,11 +372,13 @@ clear p s i entro
 % Define test types
 ttype = {'kstest2', 'permutation'};
 
-% Compare activations between conditions.  The second index c indicates which IC space is used
+% Compare activations between conditions.  The second index (c) indicates which IC space is used
 for t = 1:numel(ttype)
-	sig.AAL(t) = robustTests(dFC.cond{1}, dFC.cond{2}, N.ROI, 'pval',pval.target, 'testtype',ttype{t});						% Compare ROI time series
+	disp(['Running ', ttype{t}, ' test on activations in AAL space.']);
+	sig.BOLD(t) = robustTests(cell2mat(BOLD(:,1)'), cell2mat(BOLD(:,2)'), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD time series
+	sig.dFC(t) = robustTests(dFC.cond{1}, dFC.cond{2}, size(dFC.cond{1},1), 'pval',pval.target, 'testtype',ttype{t});					% Compare dFC time series
 	for c = 1:N.conditions
-		sig.IC(t,c) = robustTests(activities.cond{c,1}, activities.cond{c,2}, N.IC(c), 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
+		sig.IC(c,t) = robustTests(activities.cond{c,1}, activities.cond{c,2}, N.IC(c), 'pval',pval.target, 'testtype',ttype{t});	% Compare IC time series
 	end
 end
 clear c t
