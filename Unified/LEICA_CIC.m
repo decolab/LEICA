@@ -42,11 +42,11 @@ clear fpath k
 load(fullfile(path{4}, 'sc90.mat'));
 
 % Set methods
-distType = 'cosine';	% for measuring distance: cosine or exponential
-compressType = 'none';	% for compressing matrix: eigenvector, average, or none
+aType.dist = 'cosine';	% for measuring distance: cosine or exponential
+aType.compress = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
 
 % File to save
-switch compressType
+switch aType.compress
 	case {'LEICA', 'eigenvector'}
 		fileName = 'LEICA90_CIC';
 	case 'average'
@@ -54,7 +54,7 @@ switch compressType
 	otherwise
 		fileName = 'ICA90_CIC';
 end
-switch distType
+switch aType.dist
 	case 'cosine'
 		fileName = strcat(fileName, '_COS');
 	case 'exponential'
@@ -196,55 +196,27 @@ subplot(2,2,1); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Patient BOLD');
 subplot(2,2,2); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Control BOLD');
 subplot(2,2,[3 4]); hold on; histogram(cell2mat(BOLD(:,1)')); histogram(cell2mat(BOLD(:,2)')); legend('Patient', 'Control');
 
-% Compute BOLD phase and z-score
-PH = cell(max(N.subjects), N.conditions);
-disp('Computing phase of BOLD signal');
-for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		[PH{s,c}, BOLD{s,c}] = regionPhase(BOLD{s,c}, bfilt, afilt);
-	end
-end
-clear s c
 
 % Preallocate storage arrays
-switch compressType
-	case {'LEICA', 'eigenvector', 'average'}
-		dFC.concat = zeros(N.ROI, T.scan*sum(N.subjects));
-	otherwise
-		dFC.concat = zeros(length(Isubdiag), T.scan*sum(N.subjects));
-end
-
-% Preallocate variables to save FC patterns and associated information
-T.index = zeros(2, T.scan*sum(N.subjects));	% vector with subject nr and task at each t
-t = 0;									% Index of time (starts at 0, updated until N.subjects*T.scan)
-
-% Compute instantaneous FC (BOLD Phase Synchrony) and leading eigenvector (V1) for each time point
-for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		
-		% Index subject, condition of current dFC sequence
-		t = t+1 : t+T.scan;
-		T.index(:,t) = repmat([s c]', 1,T.scan);
-		
-		% Extract dFC
-		dFC.concat(:,t) = LEdFC(PH{s,c}, 'distType',distType, 'compressType',compressType, 'nROI',N.ROI, 'T',T.scan);
-		t = t(end);
-	end
-end
-clear afilt bfilt c s t m n iPH iZ V1 t_all Isubdiag sc90
-
-% Segment dFC
-dFC.cond = cell(1, N.conditions);
+PH = cell(max(N.subjects), N.conditions);
 dFC.subj = cell(max(N.subjects), N.conditions);
+T.index = nan(N.conditions, sum(N.subjects)*T.scan);
+t = zeros(2,1);
+
+% Compute subject-level BOLD phase and dFC
+disp('Computing subject-level dFC');
+dFC.cond = cell(1, N.conditions);
 for c = 1:N.conditions
-	I = T.index(2,:) == c;
-	dFC.cond{c} = dFC.concat(:,I);
 	for s = 1:N.subjects(c)
-		I = (T.index(2,:) == c & T.index(1,:) == s);
-		dFC.subj{s,c} = dFC.concat(:,I);
+		[PH{s,c}, dFC.subj{s,c}] = phasesync(BOLD{s,c}, N.ROI, T.scan, bfilt, afilt, aType);
+		t(1) = t(2) + 1;
+		t(2) = t(1)-1 + size(dFC.subj{s,c}, 2);
+		T.index(:, t(1):t(2)) = repmat([s,c]', [1, size(dFC.subj{s,c},2)]);
 	end
+	dFC.cond{c} = cell2mat(dFC.subj(1:N.subjects(c),c)');
 end
-clear I s c
+dFC.concat = cell2mat(dFC.cond);
+clear t s c afilt bfilt Isubdiag sc90
 
 % Plot LEdFC signals
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
@@ -307,7 +279,7 @@ end
 clear k
 
 % Compute component matrices
-if strcmpi(compressType, {'LEICA', 'eigenvector', 'average'})
+if strcmpi(aType.compress, {'LEICA', 'eigenvector', 'average'})
 	ICs = nan(N.ROI, N.ROI, size(memberships,2));
 	for i = 1:size(memberships,2)
 		ICs(:,:,i) = memberships(:,i) * memberships(:,i)';
