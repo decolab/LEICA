@@ -191,24 +191,19 @@ end
 clear c s ts subjectBOLD
 
 % Plot BOLD signals
-F.BOLD = figure; hold on;
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2,1); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Patient BOLD');
 subplot(2,2,2); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Control BOLD');
 subplot(2,2,[3 4]); hold on; histogram(cell2mat(BOLD(:,1)')); histogram(cell2mat(BOLD(:,2)')); legend('Patient', 'Control');
 
 % Compute BOLD phase and z-score
 PH = cell(max(N.subjects), N.conditions);
-Z.subj = cell(max(N.subjects), N.conditions);
-Z.cond = cell(1,N.conditions);
 disp('Computing phase of BOLD signal');
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
 		[PH{s,c}, BOLD{s,c}] = regionPhase(BOLD{s,c}, bfilt, afilt);
-		Z.subj{s,c} = zscore(BOLD{s,c},0,2);
 	end
-	Z.cond{c} = cell2mat(Z.subj(:,c)');
 end
-Z.concat = cell2mat(Z.cond);
 clear s c
 
 % Preallocate storage arrays
@@ -252,11 +247,10 @@ end
 clear I s c
 
 % Plot LEdFC signals
-F.LEdFC = figure; hold on;
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2,1); imagesc(dFC.cond{1}); colorbar; title('Patient LEdFC');
 subplot(2,2,2); imagesc(dFC.cond{2}); colorbar; title('Control LEdFC');
 subplot(2,2,[3 4]); hold on; histogram(dFC.cond{1}); histogram(dFC.cond{2}); legend('Patient', 'Control');
-
 
 % Compute FCD, power spectra of dFC
 for c = 1:N.conditions
@@ -272,7 +266,7 @@ con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(2),2)), [N.subjects(2)*175^2, 1
 [FCD.dFC.h, FCD.dFC.p, FCD.dFC.ksdist] = kstest2(con, pat);
 
 % Visualize dFC FCD
-F.FCD.dFC = figure; hold on;
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2, 1); imagesc(cell2mat(FCD.dFC.subj(1:N.subjects(1),1))'); colorbar; title('Patient dFC FCD');
 subplot(2,2, 2); imagesc(cell2mat(FCD.dFC.subj(1:N.subjects(2),2))'); colorbar; title('Control dFC FCD');
 subplot(2,2, [3 4]); hold on; histogram(pat); histogram(con); legend({'Patient', 'Control'});
@@ -322,45 +316,54 @@ end
 clear i
 
 % Visualize IC activations
-F.LEICA = figure; hold on;
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2, 1); imagesc(cell2mat(activities.subj(1:N.subjects(1),1)')); colorbar; title('Patient LEICA Activations');
 subplot(2,2, 2); imagesc(cell2mat(activities.subj(1:N.subjects(2),2)')); colorbar; title('Control LEICA Activations');
 subplot(2,2, [3 4]); hold on; histogram(cell2mat(activities.subj(1:N.subjects(1),1))); histogram(cell2mat(activities.subj(1:N.subjects(2),2))); legend({'Patient', 'Control'});
 
 
 
-%% Compute IC metrics
+%% Compute global metrics (entropy, metastability)
 
 % Preallocate storage arrays:
 %	Activation magnitude means, medians, standard deviations
 %	Component-wise Kuramoto order parameter & metastability
 %	Subject-wise entropies
-metastable.cond = nan(1, N.conditions);
-kuramoto.cond = nan(N.conditions, T.scan*max(N.subjects));
-metastable.subj = nan(max(N.subjects), N.conditions);
-kuramoto.subj = nan(max(N.subjects), N.conditions, T.scan);
-entro.subj = nan(N.IC, max(N.subjects), N.conditions);
+metastable.IC = nan(max(N.subjects), N.conditions);
+metastable.dFC = nan(max(N.subjects), N.conditions);
+metastable.BOLD = nan(max(N.subjects), N.conditions);
+metastable.PH = nan(max(N.subjects), N.conditions);
+entro.all = nan(N.IC, max(N.subjects), N.conditions);
 for c = 1:N.conditions
-	[kuramoto.cond(c, 1:T.scan*N.subjects(c)), metastable.cond(c)] = findStability(activities.cond{c});
 	for s = 1:N.subjects(c)
-		[kuramoto.subj(s,c,:), metastable.subj(s,c)] = findStability(activities.subj{s,c});
+		[~, metastable.BOLD(s,c)] = findStability(BOLD{s,c});
+		[~, metastable.PH(s,c)] = findStability(BOLD{s,c});
+		[~, metastable.dFC(s,c)] = findStability(dFC.subj{s,c});
+		[~, metastable.IC(s,c)] = findStability(activities.subj{s,c});
 		for ass = 1:N.IC
-			entro.subj(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
+			entro.all(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
 		end
 	end
 end
 clear c s ass
-entro.subj = squeeze(sum(entro.subj, 1));
+entro.subj = squeeze(mean(entro.all, 1, 'omitnan'));
+entro.IC = squeeze(mean(entro.all, 2, 'omitnan'));
 
 % Convert metrics to table format
-metastable.cond = array2table(metastable.cond, 'VariableNames', labels.Properties.VariableNames);
-metastable.subj = array2table(metastable.subj, 'VariableNames', labels.Properties.VariableNames);
+metastable.BOLD = array2table(metastable.BOLD, 'VariableNames', labels.Properties.VariableNames);
+metastable.PH = array2table(metastable.PH, 'VariableNames', labels.Properties.VariableNames);
+metastable.dFC = array2table(metastable.dFC, 'VariableNames', labels.Properties.VariableNames);
+metastable.IC = array2table(metastable.IC, 'VariableNames', labels.Properties.VariableNames);
 entro.subj = array2table(entro.subj, 'VariableNames', labels.Properties.VariableNames);
+entro.IC = array2table(entro.IC, 'VariableNames', labels.Properties.VariableNames);
 
 % Visualize IC metrics
-F.metrics = figure; hold on;
-subplot(1,2,1); hold on; histogram(metastable.subj{:,'Patient'}); histogram(metastable.subj{:,'Control'}); legend('Patients', 'Controls'); title('Metastability');
-subplot(1,2,2); hold on; histogram(entro.subj{:,'Patient'}); histogram(entro.subj{:,'Control'}); legend('Patients', 'Controls'); title('Entropy');
+F(N.fig) = figure; hold on; title('Metastability'); N.fig = N.fig+1;
+subplot(1,2,1); hold on; histogram(metastable.dFC{:,'Patient'}); histogram(metastable.dFC{:,'Control'}); legend('Patients', 'Controls'); title('dFC Metastability');
+subplot(1,2,2); hold on; histogram(metastable.IC{:,'Patient'}); histogram(metastable.IC{:,'Control'}); legend('Patients', 'Controls'); title('IC Metastability');
+F(N.fig) = figure; hold on; title('Entropy'); N.fig = N.fig+1;
+subplot(1,2,1); hold on; histogram(entro.subj{:,'Patient'}); histogram(entro.subj{:,'Control'}); legend('Patients', 'Controls'); title('Mean Subject Entropy');
+subplot(1,2,2); hold on; histogram(entro.IC{:,'Patient'}); histogram(entro.IC{:,'Control'}); legend('Patients', 'Controls'); title('Mean IC Entropy');
 
 
 
@@ -377,7 +380,7 @@ end
 clear c s i
 
 % Visualize FCD
-F.FCD.IC = figure; hold on;
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2,1); imagesc(cell2mat(FCD.IC.subj(:,1))'); colorbar; title('LEICA FCD: Patients');
 subplot(2,2,2); imagesc(cell2mat(FCD.IC.subj(:,2))'); colorbar; title('LEICA FCD: Controls');
 subplot(2,2,[3 4]); hold on; histogram(cell2mat(FCD.IC.subj(:,1))'); histogram(cell2mat(FCD.IC.subj(:,2))'); legend({'Patient', 'Control'});
@@ -439,7 +442,7 @@ inter = reshape(pspect.IC.sect{2}, [1, numel(pspect.IC.sect{2})]);
 
 % Visualize power spectral distances
 edges = 0:5:50;
-F.pspect = figure; hold on;
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,3,1); histogram(pat, edges); title('Patient Spectral Distances'); subplot(2,3,2); histogram(con, edges); title('Control'); subplot(2,3,3); histogram(inter, edges); title('Inter');
 subplot(2,3,4); hold on; histogram(pat, edges); histogram(con, edges); title('Grouped Spectral Distances'); legend({'Patient', 'Control'});
 subplot(2,3,5); hold on; histogram(pat, edges); histogram(inter, edges); title('Grouped Spectral Distances'); legend({'Patient', 'Inter'});
@@ -456,7 +459,7 @@ inter = reshape(pgram.IC.sect{2}, [1, numel(pgram.IC.sect{2})]);
 
 % Visualize periodogram distances
 edges = 0:50:1500;
-F.pgram = figure; hold on;
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,3,1); histogram(pat, edges); title('Patient Periodogram Distances'); subplot(2,3,2); histogram(con, edges); title('Control Periodogram Distances'); subplot(2,3,3); histogram(inter, edges); title('Inter Periodogram Distances');
 subplot(2,3,4); hold on; histogram(pat, edges); histogram(con, edges); title('Grouped Periodogram Distances'); legend({'Patient', 'Control'});
 subplot(2,3,5); hold on; histogram(pat, edges); histogram(inter, edges); title('Grouped Periodogram Distances'); legend({'Patient', 'Inter'});
@@ -513,7 +516,7 @@ coherence.inter = inter;
 clear pat inter con
 
 % Visualize coherence averages, standard deviations
-F.coherence = figure; hold on;
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(3,2,1); imagesc(mean(coherence.pat, 3)); colorbar; title('Average Inter-Patient Coherence'); ylabel('IC'); xlabel('Frequency');
 subplot(3,2,2); imagesc(var(coherence.pat, [], 3)); colorbar; title('Variance of Inter-Patient Coherence'); ylabel('IC'); xlabel('Frequency');
 subplot(3,2,3); imagesc(mean(coherence.con, 3)); colorbar; title('Average Inter-Control Coherence'); ylabel('IC'); xlabel('Frequency');
@@ -529,31 +532,93 @@ ttype = {'kstest2', 'permutation'};
 
 % Test with Kolmogorov-Smirnov, permutation test
 for t = 1:numel(ttype)
-	disp(['Running ', ttype{t}, ' tests on activations.']);
+	disp(['Running ', ttype{t}, ' tests.']);
 	
 	% Compare activations between conditions
-	sig.BOLD(t) = robustTests(cell2mat(BOLD(:,1)'), cell2mat(BOLD(:,2)'), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare ROI time series
+	sig.BOLD(t) = robustTests(cell2mat(BOLD(:,1)'), cell2mat(BOLD(:,2)'), N.ROI, 'p',pval.target, 'testtype',ttype{t});				% Compare ROI time series
 	sig.dFC(t) = robustTests(dFC.cond{1}, dFC.cond{2}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttype{t});					% Compare dFC time series
-	sig.IC(t) = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});		% Compare IC time series
+	sig.IC(t) = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});					% Compare IC time series
+	sig.entro.IC(t) = robustTests(squeeze(entro.all(:,:,1)), squeeze(entro.all(:,:,2)), N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
 end
 clear con pat t
 
-% Subject metastabilities
+% Subject BOLD metastabilities
 disp('Running permutation tests on metastability.');
-con = metastable.subj{:,'Control'}(isfinite(metastable.subj{:,'Control'}));
-pat = metastable.subj{:,'Patient'}(isfinite(metastable.subj{:,'Patient'}));
-[sig.metastable(1).h, sig.metastable(1).p, sig.metastable(1).effsize] = kstest2(con, pat);
-[sig.metastable(2).p, ~, sig.metastable(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+con = metastable.BOLD{:,'Control'}(isfinite(metastable.BOLD{:,'Control'}));
+pat = metastable.BOLD{:,'Patient'}(isfinite(metastable.BOLD{:,'Patient'}));
+[sig.metastable.BOLD(1).h, sig.metastable.BOLD(1).p, sig.metastable.BOLD(1).effsize] = kstest2(con, pat);
+[sig.metastable.BOLD(2).p, ~, sig.metastable.BOLD(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+if sig.metastable.BOLD(2).p < 0.05
+	sig.metastable.BOLD(2).h = 1;
+else
+	sig.metastable.BOLD(2).h = 0;
+end
+clear con pat
+
+% Subject PH metastabilities
+disp('Running permutation tests on metastability.');
+con = metastable.PH{:,'Control'}(isfinite(metastable.PH{:,'Control'}));
+pat = metastable.PH{:,'Patient'}(isfinite(metastable.PH{:,'Patient'}));
+[sig.metastable.PH(1).h, sig.metastable.PH(1).p, sig.metastable.PH(1).effsize] = kstest2(con, pat);
+[sig.metastable.PH(2).p, ~, sig.metastable.PH(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+if sig.metastable.PH(2).p < 0.05
+	sig.metastable.PH(2).h = 1;
+else
+	sig.metastable.PH(2).h = 0;
+end
+clear con pat
+
+% Subject dFC metastabilities
+disp('Running permutation tests on metastability.');
+con = metastable.dFC{:,'Control'}(isfinite(metastable.dFC{:,'Control'}));
+pat = metastable.dFC{:,'Patient'}(isfinite(metastable.dFC{:,'Patient'}));
+[sig.metastable.dFC(1).h, sig.metastable.dFC(1).p, sig.metastable.dFC(1).effsize] = kstest2(con, pat);
+[sig.metastable.dFC(2).p, ~, sig.metastable.dFC(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+if sig.metastable.dFC(2).p < 0.05
+	sig.metastable.dFC(2).h = 1;
+else
+	sig.metastable.dFC(2).h = 0;
+end
+clear con pat
+
+% Subject IC metastabilities
+disp('Running permutation tests on metastability.');
+con = metastable.IC{:,'Control'}(isfinite(metastable.IC{:,'Control'}));
+pat = metastable.IC{:,'Patient'}(isfinite(metastable.IC{:,'Patient'}));
+[sig.metastable.IC(1).h, sig.metastable.IC(1).p, sig.metastable.IC(1).effsize] = kstest2(con, pat);
+[sig.metastable.IC(2).p, ~, sig.metastable.IC(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+if sig.metastable.IC(2).p < 0.05
+	sig.metastable.IC(2).h = 1;
+else
+	sig.metastable.IC(2).h = 0;
+end
 clear con pat
 
 % Subject entropies
 disp('Running permutation tests on entropy.');
 con = entro.subj{:,'Control'}(isfinite(entro.subj{:,'Control'}));
 pat = entro.subj{:,'Patient'}(isfinite(entro.subj{:,'Patient'}));
-[sig.entro(1).h, sig.entro(1).p, sig.entro(1).effsize] = kstest2(con, pat);
-[sig.entro(2).p, ~, sig.entro(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+[sig.entro.meansubj(1).h, sig.entro.meansubj(1).p, sig.entro(1).meansubj.effsize] = kstest2(con, pat);
+[sig.entro.meansubj(2).p, ~, sig.entro.meansubj(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+if sig.entro.meansubj(2).p < 0.05
+	sig.entro.meansubj(2).h = 1;
+else
+	sig.entro.meansubj(2).h = 0;
+end
 clear con pat
 
+% IC entropies
+disp('Running permutation tests on entropy.');
+con = entro.IC{:,'Control'}(isfinite(entro.IC{:,'Control'}));
+pat = entro.IC{:,'Patient'}(isfinite(entro.IC{:,'Patient'}));
+[sig.entro.meanIC(1).h, sig.entro.meanIC(1).p, sig.entro.meanIC(1).effsize] = kstest2(con, pat);
+[sig.entro.meanIC(2).p, ~, sig.entro.meanIC(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+if sig.entro.meanIC(2).p < 0.05
+	sig.entro.meanIC(2).h = 1;
+else
+	sig.entro.meanIC(2).h = 0;
+end
+clear con pat
 
 
 %% Save results
@@ -566,4 +631,3 @@ end
 
 % Save all data
 save(fullfile(path{6}, fileName));
-
