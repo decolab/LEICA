@@ -1,7 +1,20 @@
 function [iPH] = dFC(TS, varargin)
-% DFC 
-%	
+%% DFC computes the dynamic functional connectivity from the time series.
+% Inputs:
+%	TS: time series from which to compute dFC.  Must already be processed
+%		into appropriate format.
+%	distType (optional): similarity measure to use in computing dFC.
+%		Supports cosine similarity and a variant of exponential distance.
+%		Default: cosine similarity.
+%	nROI (optional): number of regions of interest (ROIs) in time series.
+%		Must be less than or equal to number of rows in TS.
+%		Default: number of rows in TS.
+%	T (optional): number of time points in scan.  Must be less than or
+%		equal to number of columns in TS.
+%		Default: number of columns in TS.
 
+
+%% Set type of dFC to compute
 
 % Set default values
 distType = 'cosine';
@@ -19,6 +32,10 @@ for k = 1:2:length(varargin)
 			T = varargin{k+1};
 	end
 end
+
+
+%% Compute dFC
+%   Types available: cosine distance or exponential
 
 % Preallocate storage
 iPH = zeros(nROI, nROI, T);

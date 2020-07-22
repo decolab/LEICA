@@ -201,15 +201,11 @@ subplot(2,2,[3 4]); hold on; histogram(cell2mat(BOLD(:,1)')); histogram(cell2mat
 
 % Compute BOLD phase and z-score
 PH = cell(max(N.subjects), N.conditions);
-Z.subj = cell(max(N.subjects), N.conditions);
-Z.cond = cell(1,N.conditions);
 disp('Computing phase of BOLD signal');
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
-		[PH{s,c}, BOLD{s,c}] = regionPhase(BOLD{s,c}, bfilt, afilt);
-		Z.subj{s,c} = zscore(BOLD{s,c},0,2);
+		PH{s,c} = phaseTS(BOLD{s,c}, [], [], bfilt, afilt);
 	end
-	Z.cond{c} = cell2mat(Z.subj(:,c)');
 end
 clear s c
 

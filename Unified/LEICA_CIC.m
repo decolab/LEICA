@@ -306,6 +306,7 @@ metastable.dFC = nan(max(N.subjects), N.conditions);
 metastable.BOLD = nan(max(N.subjects), N.conditions);
 metastable.PH = nan(max(N.subjects), N.conditions);
 entro.all = nan(N.IC, max(N.subjects), N.conditions);
+entro.BOLD = nan(N.ROI, max(N.subjects), N.conditions);
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
 		[~, metastable.BOLD(s,c)] = findStability(BOLD{s,c});
@@ -315,9 +316,12 @@ for c = 1:N.conditions
 		for ass = 1:N.IC
 			entro.all(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
 		end
+		for roi = 1:N.ROI
+			entro.BOLD(roi, s, c) = HShannon_kNN_k_estimation(BOLD{s,c}(roi,:), co);
+		end
 	end
 end
-clear c s ass
+clear c s ass roi
 entro.subj = squeeze(mean(entro.all, 1, 'omitnan'));
 entro.IC = squeeze(mean(entro.all, 2, 'omitnan'));
 
@@ -510,7 +514,8 @@ for t = 1:numel(ttype)
 	sig.BOLD(t) = robustTests(cell2mat(BOLD(:,1)'), cell2mat(BOLD(:,2)'), N.ROI, 'p',pval.target, 'testtype',ttype{t});				% Compare ROI time series
 	sig.dFC(t) = robustTests(dFC.cond{1}, dFC.cond{2}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttype{t});					% Compare dFC time series
 	sig.IC(t) = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});					% Compare IC time series
-	sig.entro.IC(t) = robustTests(squeeze(entro.all(:,:,1)), squeeze(entro.all(:,:,2)), N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC time series
+	sig.entro.IC(t) = robustTests(squeeze(entro.all(:,:,1)), squeeze(entro.all(:,:,2)), N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC entropies
+	sig.entro.BOLD(t) = robustTests(squeeze(entro.BOLD(:,:,1)), squeeze(entro.BOLD(:,:,2)), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD entropies
 end
 clear con pat t
 
