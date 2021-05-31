@@ -22,9 +22,9 @@ path{3,1} = strjoin(path{1}(1:end-1),'/');
 path{1,1} = strjoin(path{1}(1:end-3),'/');
 
 % Set required subdirectories
-path{4,1} = fullfile(path{2},'Data');
-path{5,1} = fullfile(path{2},'Results');
-path{6,1} = fullfile(path{2},'Results','LEICA');
+path{4,1} = fullfile(path{2}, 'OCD', 'Data');
+path{5,1} = fullfile(path{2}, 'OCD', 'Results');
+path{6,1} = fullfile(path{2}, 'OCD', 'Results','LEICA');
 
 % Add relevant paths
 fpath{1,1} = fullfile(path{1},'MATLAB','spm12');
@@ -44,24 +44,52 @@ load(fullfile(path{4}, 'sc90.mat'));
 % Set methods
 aType.dist = 'cosine';	% for measuring distance: cosine or exponential
 aType.compress = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
+aType.filter = 'wideband';	% determine which type of filter to use; highpass or bandpass
+aType.segment = 'kmeans';		% determine which segmentation to use: ICA, k-means, or binary k-means (only assigns states as ON or OFF)
 
-% File to save
+% Set number of neighbors to search for in KNN
+co = HShannon_kNN_k_initialization(1);
+
+% Set highpass or bandpass filter
+T.TR = 2.73;				% Repetition Time (seconds)
+fnq = 1/(2*T.TR);			% Nyquist frequency
+k = 2;						% 2nd order butterworth filter\
+switch aType.filter
+    case 'bandpass'
+        flp = 0.04;     % lowpass frequency of filter (Hz)
+        fhi = 0.07;		% highpass
+        Wn = [flp/fnq fhi/fnq];	% butterworth bandpass non-dimensional frequency
+        fType = 'bandpass';
+    case 'wideband'
+        flp = 0.01;     % lowpass frequency of filter (Hz)
+        fhi = 0.1;		% highpass
+        Wn = [flp/fnq fhi/fnq];	% butterworth bandpass non-dimensional frequency
+        fType = 'bandpass';
+    otherwise
+        Wn = flp/fnq;			% butterworth highpass non-dimensional frequency
+        fType = 'high';
+end
+clear flp fhi
+
+% Set filename to save
 switch aType.compress
-	case {'LEICA', 'eigenvector'}
-		fileName = 'LEICA90_CIC';
+	case {'LE', 'eigenvector'}
+		fileName = 'LE';
 	case 'average'
-		fileName = 'MICA90_CIC';
+		fileName = 'M';
 	otherwise
-		fileName = 'ICA90_CIC';
+		fileName = 'dFC';
 end
 switch aType.dist
 	case 'cosine'
-		fileName = strcat(fileName, '_COS');
+		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_COS');
 	case 'exponential'
-		fileName = strcat(fileName, '_EXP');
+		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_EXP');
 end
-fList = dir(fullfile(path{6}, strcat(fileName, '_*')));	% Get file list
-nIter = numel(fList); clear fList						% Find number of previous iterations
+fileName = strcat(fileName, '_', aType.filter, '_k', num2str(co.mult));
+
+fList = dir(fullfile(path{6}, strcat(fileName, '*')));	% Get file list
+nIter = numel(fList) + 1; clear fList;						% Find number of previous iterations
 fileName = strcat(fileName, '_Iteration', num2str(nIter)); clear nIter	% Edit fileName
 
 % Define list of patients
@@ -95,23 +123,23 @@ dROI = N.ROI - nROI;
 I = [1:(nROI/2), (nROI/2+dROI+1):N.ROI]';
 
 % Get functional data
-for k = 1:nFiles
+for n = 1:nFiles
 	
 	% Rename files
-	D = strsplit(fList(k).name, '_');
-	fName{k} = D{1};
+	D = strsplit(fList(n).name, '_');
+	fName{n} = D{1};
 	
 	% Visualize data being extracted
-	disp(['Extracting data for subject ', fName{k}, '.']);
+	disp(['Extracting data for subject ', fName{n}, '.']);
 	
 	% Load data
-	subjectBOLD(:,:,k) = load(fullfile(path{4}, loadDirectory, fList(k).name))';
+	subjectBOLD(:,:,n) = load(fullfile(path{4}, loadDirectory, fList(n).name))';
 	
 	% Convert LR-symmetric to LR-mirrored ordering
-	subjectBOLD(:,:,k) = LR_version_symm(subjectBOLD(:,:,k));
+	subjectBOLD(:,:,n) = LR_version_symm(subjectBOLD(:,:,n));
 	
 end
-clear D ans k loadDirectory loadFiles nFiles fList
+clear D ans n loadDirectory loadFiles nFiles fList
 
 % Remove cerebellar regions
 if exist('I', 'var')
@@ -121,11 +149,12 @@ if exist('I', 'var')
 end
 clear nROI dROI
 
-% Symmetrize node labels
-load(fullfile(path{4},'Atlases','AAL','AAL_labels'));
-labelROI = string(label90);
-labelROI = LR_version_symm(labelROI);
-clear label90
+% Symmetrize node coordinates, labels
+load(fullfile(path{2},'Atlases','AAL','aal_cog.txt'));
+load(fullfile(path{2},'Atlases','AAL','AAL_labels.mat'));
+coords_AAL90 = LR_version_symm(aal_cog);
+label_AAL90 = string(LR_version_symm(label90));
+clear aal_cog label90
 
 % Extract indices for BOLD signals of patients, controls
 I(:,1) = ~ismember(fName, patientData{:, 'Code'});
@@ -148,21 +177,9 @@ end
 labels = cell2table(labels, 'VariableNames',{'Control','Patient'});
 clear c fName
 
-
-
-%% Extract dFC
-
-% Temporal parameters
-T.TR = 2.73;			% Repetition Time (seconds)
-
-% Set bandpass filter
-fnq = 1/(2*T.TR);				% Nyquist frequency
-flp = 0.04;						% lowpass frequency of filter (Hz)
-fhi = 0.07;						% highpass
-Wn = [flp/fnq fhi/fnq];			% butterworth bandpass non-dimensional frequency
-k = 2;							% 2nd order butterworth filter
-[bfilt,afilt] = butter(k,Wn);	% construct the filter
-clear fnq flp fhi Wn k
+% Filter signal
+[bfilt,afilt] = butter(k,Wn,fType);
+clear fnq flp fhi Wn k fType
 
 % Indices for vectorizing lower triangle
 Isubdiag = find(triu(ones(N.ROI), 1));
@@ -170,11 +187,12 @@ Isubdiag = find(triu(ones(N.ROI), 1));
 % Set hypothesis test parameters
 pval.target = 0.05;
 
-% Set number of neighbors to search for in KNN
-co = HShannon_kNN_k_initialization(1);
-
 % Set figure counter
 N.fig = 1;
+
+
+
+%% Extract dFC
 
 % Preallocate data arrays
 
@@ -193,9 +211,8 @@ clear c s ts subjectBOLD
 % Plot BOLD signals
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2,1); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Patient BOLD');
-subplot(2,2,2); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Control BOLD');
+subplot(2,2,2); imagesc(cell2mat(BOLD(:,2)')); colorbar; title('Control BOLD');
 subplot(2,2,[3 4]); hold on; histogram(cell2mat(BOLD(:,1)')); histogram(cell2mat(BOLD(:,2)')); legend('Patient', 'Control');
-
 
 % Preallocate storage arrays
 PH = cell(max(N.subjects), N.conditions);
@@ -218,7 +235,7 @@ end
 dFC.concat = cell2mat(dFC.cond);
 clear t s c afilt bfilt Isubdiag sc90
 
-% Plot LEdFC signals
+% Plot dFC signals
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2,1); imagesc(dFC.cond{1}); colorbar; title('Patient LEdFC');
 subplot(2,2,2); imagesc(dFC.cond{2}); colorbar; title('Control LEdFC');
@@ -228,22 +245,9 @@ subplot(2,2,[3 4]); hold on; histogram(dFC.cond{1}); histogram(dFC.cond{2}); leg
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
 		FCD.dFC.subj{s,c} = computeFCD(dFC.subj{s,c}, 'cosine');
-		pspect.dFC.subj{s,c} = pspectrum(dFC.subj{s,c}', 1/T.TR)';
+		% pspect.dFC.subj{s,c} = pspectrum(dFC.subj{s,c}', 1/T.TR)';
 	end
 end
-
-% Compute KS distances between control, patient groups
-pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(1),1)), [N.subjects(1)*175^2, 1]);
-con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(2),2)), [N.subjects(2)*175^2, 1]);
-[FCD.dFC.h, FCD.dFC.p, FCD.dFC.ksdist] = kstest2(con, pat);
-
-% Visualize dFC FCD
-F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(2,2, 1); imagesc(cell2mat(FCD.dFC.subj(1:N.subjects(1),1))'); colorbar; title('Patient dFC FCD');
-subplot(2,2, 2); imagesc(cell2mat(FCD.dFC.subj(1:N.subjects(2),2))'); colorbar; title('Control dFC FCD');
-subplot(2,2, [3 4]); hold on; histogram(pat); histogram(con); legend({'Patient', 'Control'});
-clear con pat
-
 
 
 %% Compute ICs from dFC
@@ -255,32 +259,61 @@ N.IC = NumberofIC(dFC.concat);
 [~,~,~,~,explained,~] = pca(dFC.concat');
 explainedVar = sum(explained(N.IC+1:end));
 
+% Check how many eigenvalues needed to explain 95% of variance
+% [eVal, ~] = eig(covarianceMatrix);
+% find(cumsum(eVal)/sum(eVal) > 0.95);
+
 % Compute assembly activity timecourses and memberships
-disp('Processing the ICs from BOLD data');
-[activities.concat, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
+switch aType.segment
+	case 'ICA'
+		disp('Processing ICs from dFC data');
+		[activities.concat, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
+	case 'binary'
+		disp('Processing clusters from dFC data');
+		[idx, memberships] = kmeans(dFC.concat', N.IC);
+        memberships = memberships';
+		activities.concat = zeros(N.IC, length(idx));
+		for i = 1:N.IC
+			activities.concat(i, :) = (idx == i)';
+		end
+		clear i
+	case 'kmeans'
+		disp('Processing clusters from dFC data');
+		[idx, memberships, ~, D] = kmeans(dFC.concat', N.IC);
+        memberships = memberships'; D = D';
+		activities.concat = 1./D;
+		activities.concat = activities.concat./max(activities.concat, [], 'all');
+end
+meanActivity.concat = mean(activities.concat, 2);
 
 % Separate assembly activations by condition & subject
 activities.cond = cell(1, N.conditions);
 activities.subj = cell(max(N.subjects), N.conditions);
+meanActivity.cond = nan(N.IC, N.conditions);
+meanActivity.subj = nan(N.IC, N.conditions, max(N.subjects));
 for c = 1:N.conditions
 	I = T.index(2,:) == c;
 	activities.cond{c} = activities.concat(:,I);
 	for s = 1:N.subjects(c)
 		I = (T.index(2,:) == c & T.index(1,:) == s);
 		activities.subj{s,c} = activities.concat(:,I);
+		meanActivity.subj(:,c,s) = mean(activities.subj{s,c}, 2);
 	end
+	meanActivity.cond(:,c) = mean(activities.cond{c}, 2);
 end
 clear I s c
 
-% Normalize membership weights
+% Sort memberships by activation level and normalize weights
+[meanActivity.concat, i] = sort(meanActivity.concat, 1, 'descend');
+memberships = memberships(:,i);
 for k = 1:N.IC
 	memberships(:,k) = memberships(:,k)./norm(memberships(:,k));
 end
-clear k
+clear k i
 
 % Compute component matrices
-if strcmpi(aType.compress, {'LEICA', 'eigenvector', 'average'})
-	ICs = nan(N.ROI, N.ROI, size(memberships,2));
+if strcmpi(aType.compress, 'LEICA') || strcmpi(aType.compress, 'eigenvector') || strcmpi(aType.compress, 'average')
+	ICs = nan(N.ROI, N.ROI, N.IC);
 	for i = 1:size(memberships,2)
 		ICs(:,:,i) = memberships(:,i) * memberships(:,i)';
 	end
@@ -289,9 +322,49 @@ clear i
 
 % Visualize IC activations
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(2,2, 1); imagesc(cell2mat(activities.subj(1:N.subjects(1),1)')); colorbar; title('Patient LEICA Activations');
-subplot(2,2, 2); imagesc(cell2mat(activities.subj(1:N.subjects(2),2)')); colorbar; title('Control LEICA Activations');
-subplot(2,2, [3 4]); hold on; histogram(cell2mat(activities.subj(1:N.subjects(1),1))); histogram(cell2mat(activities.subj(1:N.subjects(2),2))); legend({'Patient', 'Control'});
+subplot(2,3, [1 2]); imagesc(cell2mat(activities.subj(1:N.subjects(1),1)')); colorbar; title('Patient LEICA Activations');
+subplot(2,3, [4 5]); imagesc(cell2mat(activities.subj(1:N.subjects(2),2)')); colorbar; title('Control LEICA Activations');
+subplot(2,3, [3 6]); hold on; histogram(cell2mat(activities.subj(1:N.subjects(1),1))); histogram(cell2mat(activities.subj(1:N.subjects(2),2))); legend({'Patient', 'Control'});
+
+% Compute FCD of subject-level ICs
+for c = 1:N.conditions
+	for s = 1:N.subjects(c)
+		FCD.IC.subj{s,c} = computeFCD(activities.subj{s,c}, 'cosine');
+		% pspect.IC.subj{s,c} = pspectrum(activities.subj{s,c}', 1/T.TR)';
+		% pgram.IC.subj{s,c} = periodogram(activities.subj{s,c}', [], [], 1/T.TR)';
+	end
+end
+clear c s i
+F(N.fig) = figure; hold on; N.fig = N.fig+1; colormap jet
+subplot(2,2, 1); imagesc(FCD.IC.subj{1,1}); colorbar; title(['LEICA FCD of Control ', num2str(1)]);
+subplot(2,2, 2); imagesc(FCD.IC.subj{1,2}); colorbar; title(['LEICA FCD of Patient ', num2str(1)]);
+subplot(2,2, [3 4]); hold on;
+histogram(cell2mat(FCD.IC.subj(:,1))', 'Normalization','Probability');
+histogram(cell2mat(FCD.IC.subj(:,2))', 'Normalization','Probability');
+legend(labels.Properties.VariableNames);
+
+% Compute correlation between static FC, weighted component average
+d = nan(N.ROI, N.ROI, N.IC);
+if strcmpi(aType.compress, 'none')
+	m = zeros(N.ROI);
+	for c = 1:N.IC
+		m(find(tril(ones(N.ROI), -1))) = memberships(:,c);
+		m = m + m';
+		m = m./max(abs(m), [], 'all', 'omitnan') + eye(N.ROI);
+		d(:,:,c) = meanActivity.concat(c).*m(:,:);
+	end
+else
+	for c = 1:N.IC
+		d(:,:,c) = meanActivity.concat(c).*(memberships(:,c)*memberships(:,c)');
+	end
+end
+d = d./max(abs(d), [], 'all', 'omitnan');
+rho = corrcoef(mean(d, 3), mean(FC, [3 4], 'omitnan'));
+F(N.fig) = figure; hold on; N.fig = N.fig+1; colormap jet
+subplot(1,2, 2); imagesc(mean(FC, [3 4], 'omitnan')); colorbar; title('Static FC');  xticks([]); yticks([]);
+subplot(1,2, 1); imagesc(mean(d,3)); colorbar;
+title('Weighted Motif Average'); yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+clear c d i m
 
 
 
@@ -301,204 +374,332 @@ subplot(2,2, [3 4]); hold on; histogram(cell2mat(activities.subj(1:N.subjects(1)
 %	Activation magnitude means, medians, standard deviations
 %	Component-wise Kuramoto order parameter & metastability
 %	Subject-wise entropies
+%	Subject-wise temporal complexity
 metastable.IC = nan(max(N.subjects), N.conditions);
 metastable.dFC = nan(max(N.subjects), N.conditions);
 metastable.BOLD = nan(max(N.subjects), N.conditions);
-metastable.PH = nan(max(N.subjects), N.conditions);
-entro.all = nan(N.IC, max(N.subjects), N.conditions);
 entro.BOLD = nan(N.ROI, max(N.subjects), N.conditions);
+entro.dFC = nan(N.ROI, max(N.subjects), N.conditions);
+entro.IC = nan(N.IC, max(N.subjects), N.conditions);
+fcomp.BOLD = nan(N.ROI, max(N.subjects), N.conditions);
+fcomp.dFC = nan(N.ROI, max(N.subjects), N.conditions);
+fcomp.IC = nan(N.IC, max(N.subjects), N.conditions);
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
 		[~, metastable.BOLD(s,c)] = findStability(BOLD{s,c});
-		[~, metastable.PH(s,c)] = findStability(BOLD{s,c});
 		[~, metastable.dFC(s,c)] = findStability(dFC.subj{s,c});
 		[~, metastable.IC(s,c)] = findStability(activities.subj{s,c});
 		for ass = 1:N.IC
-			entro.all(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
+			entro.IC(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
+			fcomp.IC(ass, s, c) = funccomp(activities.subj{s,c}(ass,:), []);
 		end
 		for roi = 1:N.ROI
 			entro.BOLD(roi, s, c) = HShannon_kNN_k_estimation(BOLD{s,c}(roi,:), co);
+			entro.dFC(roi, s, c) = HShannon_kNN_k_estimation(dFC.subj{s,c}(roi,:), co);
+			fcomp.BOLD(roi, s, c) = funccomp(BOLD{s,c}(roi,:), []);
+			fcomp.dFC(roi, s, c) = funccomp(dFC.subj{s,c}(roi,:), []);
 		end
 	end
 end
 clear c s ass roi
-entro.subj = squeeze(mean(entro.all, 1, 'omitnan'));
-entro.IC = squeeze(mean(entro.all, 2, 'omitnan'));
+entro.subj = squeeze(mean(entro.IC, 1, 'omitnan'));
+entro.mIC = squeeze(mean(entro.IC, 2, 'omitnan'));
+fcomp.subj = squeeze(mean(fcomp.IC, 1, 'omitnan'));
+fcomp.mIC = squeeze(mean(fcomp.IC, 2, 'omitnan'));
 
 % Convert metrics to table format
 metastable.BOLD = array2table(metastable.BOLD, 'VariableNames', labels.Properties.VariableNames);
-metastable.PH = array2table(metastable.PH, 'VariableNames', labels.Properties.VariableNames);
 metastable.dFC = array2table(metastable.dFC, 'VariableNames', labels.Properties.VariableNames);
 metastable.IC = array2table(metastable.IC, 'VariableNames', labels.Properties.VariableNames);
 entro.subj = array2table(entro.subj, 'VariableNames', labels.Properties.VariableNames);
-entro.IC = array2table(entro.IC, 'VariableNames', labels.Properties.VariableNames);
-
-% Visualize IC metrics
-F(N.fig) = figure; hold on; title('Metastability'); N.fig = N.fig+1;
-subplot(1,2,1); hold on; histogram(metastable.dFC{:,'Patient'}); histogram(metastable.dFC{:,'Control'}); legend('Patients', 'Controls'); title('dFC Metastability');
-subplot(1,2,2); hold on; histogram(metastable.IC{:,'Patient'}); histogram(metastable.IC{:,'Control'}); legend('Patients', 'Controls'); title('IC Metastability');
-F(N.fig) = figure; hold on; title('Entropy'); N.fig = N.fig+1;
-subplot(1,2,1); hold on; histogram(entro.subj{:,'Patient'}); histogram(entro.subj{:,'Control'}); legend('Patients', 'Controls'); title('Mean Subject Entropy');
-subplot(1,2,2); hold on; histogram(entro.IC{:,'Patient'}); histogram(entro.IC{:,'Control'}); legend('Patients', 'Controls'); title('Mean IC Entropy');
+entro.mIC = array2table(entro.mIC, 'VariableNames', labels.Properties.VariableNames);
+fcomp.subj = array2table(fcomp.subj, 'VariableNames', labels.Properties.VariableNames);
+fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', labels.Properties.VariableNames);
 
 
 
-%% Compute FCD, power spectra, and periodograms of ICs
+%% Comparisons
 
-% Compute FCD, power spectra, periodogram of subject-level ICs
-for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		FCD.IC.subj{s,c} = computeFCD(activities.subj{s,c}, 'cosine');
-		pspect.IC.subj{s,c} = pspectrum(activities.subj{s,c}', 1/T.TR)';
-		pgram.IC.subj{s,c} = periodogram(activities.subj{s,c}', [], [], 1/T.TR)';
-	end
-end
-clear c s i
+%   FCD
 
-% Visualize FCD
-F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(2,2,1); imagesc(cell2mat(FCD.IC.subj(:,1))'); colorbar; title('LEICA FCD: Patients');
-subplot(2,2,2); imagesc(cell2mat(FCD.IC.subj(:,2))'); colorbar; title('LEICA FCD: Controls');
-subplot(2,2,[3 4]); hold on; histogram(cell2mat(FCD.IC.subj(:,1))'); histogram(cell2mat(FCD.IC.subj(:,2))'); legend({'Patient', 'Control'});
+% Compute KS distances between control, patient dFC FCD
+pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(1),1)), [N.subjects(1)*175^2, 1]);
+con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(2),2)), [N.subjects(2)*175^2, 1]);
+[FCD.dFC.h, FCD.dFC.p, FCD.dFC.ksdist] = kstest2(con, pat);
+
+% Visualize dFC FCD
+F(N.fig) = figure; hold on; N.fig = N.fig+1; colormap jet
+subplot(2,2, 1); imagesc(FCD.dFC.subj{1,1}); colorbar; title(['dFC FCD of Control ', num2str(1)]);
+subplot(2,2, 2); imagesc(FCD.dFC.subj{1,2}); colorbar; title(['dFC FCD of Patient ', num2str(1)]);
+subplot(2,2, [3 4]); hold on; histogram(pat); histogram(con); legend({'Patient', 'Control'});
+clear con pat
 
 % Compute KS distances between control, patient FCD
-pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(1),1)), [N.subjects(1)*175^2, 1]);
-con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(2),2)), [N.subjects(2)*175^2, 1]);
+con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(1),1)), [N.subjects(1)*175^2, 1]);
+pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(2),2)), [N.subjects(2)*175^2, 1]);
 [FCD.IC.h, FCD.IC.p, FCD.IC.ksdist] = kstest2(con, pat);
 clear con pat
 
-% Compute Euclidean distances between subject power spectra, periodograms
-dummy.spect = nan(N.IC, size(pspect.IC.subj{1,1},2), sum(N.subjects));
-dummy.gram = nan(N.IC, size(pgram.IC.subj{1,1},2), sum(N.subjects));
-pspect.IC.dist = nan(sum(N.subjects), sum(N.subjects), N.IC);
-pgram.IC.dist = nan(sum(N.subjects), sum(N.subjects), N.IC);
-ind = 0;
-for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		ind = ind+1;
-		dummy.spect(:,:,ind) = pspect.IC.subj{s,c};
-		dummy.gram(:,:,ind) = pgram.IC.subj{s,c};
+
+%   Entropy & Metastability
+
+% Get bin sizes
+f = figure; hold on;
+hg{1} = histogram(metastable.dFC{:, labels.Properties.VariableNames{1}}, 'Normalization','probability');
+hg{2} = histogram(metastable.dFC{:, labels.Properties.VariableNames{2}}, 'Normalization','probability');
+sz(1) = min(hg{1}.BinWidth, hg{2}.BinWidth);
+hg{1} = histogram(metastable.IC{:, labels.Properties.VariableNames{1}}, 'Normalization','probability');
+hg{2} = histogram(metastable.IC{:, labels.Properties.VariableNames{2}}, 'Normalization','probability');
+sz(2) = min(hg{1}.BinWidth, hg{2}.BinWidth);
+close(f); clear hg f
+
+% Visualize IC metrics
+F(N.fig) = figure; hold on; title('Metastability'); N.fig = N.fig+1;
+subplot(1,2,1); hold on;
+histogram(metastable.dFC{:,'Patient'}, 'BinWidth',sz(1), 'Normalization','probability');
+histogram(metastable.dFC{:,'Control'}, 'BinWidth',sz(1), 'Normalization','probability');
+legend('Patients', 'Controls');
+title('dFC Metastability');
+subplot(1,2,2); hold on;
+histogram(metastable.IC{:,'Patient'}, 'BinWidth',sz(2), 'Normalization','probability');
+histogram(metastable.IC{:,'Control'}, 'BinWidth',sz(2), 'Normalization','probability');
+legend('Patients', 'Controls');
+title('IC Metastability');
+
+
+% Get bin sizes
+f = figure; hold on;
+hg{1} = histogram(entro.subj{:, labels.Properties.VariableNames{1}}, 'Normalization','probability');
+hg{2} = histogram(entro.subj{:, labels.Properties.VariableNames{2}}, 'Normalization','probability');
+sz(1) = min(hg{1}.BinWidth, hg{2}.BinWidth);
+hg{1} = histogram(entro.mIC{:, labels.Properties.VariableNames{1}}, 'Normalization','probability');
+hg{2} = histogram(entro.mIC{:, labels.Properties.VariableNames{2}}, 'Normalization','probability');
+sz(2) = min(hg{1}.BinWidth, hg{2}.BinWidth);
+close(f); clear hg
+
+% Visualize mean entropy distributions
+F(N.fig) = figure; hold on; title('Entropy'); N.fig = N.fig+1;
+for c = 1:numel(labels.Properties.VariableNames)
+	subplot(1,2,1); hold on;
+	histogram(entro.subj{:, labels.Properties.VariableNames{c}}, 'BinWidth',sz(1), 'Normalization','probability');
+	legend(labels.Properties.VariableNames);
+	title('Mean Subject Entropy');
+	
+	subplot(1,2,2); hold on;
+	histogram(entro.mIC{:, labels.Properties.VariableNames{c}}, 'BinWidth',sz(2), 'Normalization','probability');
+	legend(labels.Properties.VariableNames);
+	title('Mean IC Entropy');
+end
+clear sz
+
+
+% Visualize IC memberships
+if strcmpi(aType.compress, 'none')
+	for j = 1:N.IC
+
+		% Get bin sizes
+		f = figure; hold on;
+		hg{1} = histogram(entro.IC(j,:,1));
+		hg{2} = histogram(entro.IC(j,:,2));
+		sz = min(hg{1}.BinWidth, hg{2}.BinWidth);
+		close(f);
+
+		% Scale memberships (optional)
+		mships = zscore(memberships(:,j));
+
+		% Open figure
+		F(nFig) = figure; nFig = nFig + 1; hold on;
+
+		% Connectivity
+		kax = subplot(2, 4, [3 4]); hold on;
+		sgtitle(['Component ', num2str(j)]);
+		a = squeeze(memberships(:,j))*squeeze(memberships(:,j))';
+		imagesc(a); colorbar; hold on;
+		xlim([1 size(a,2)]); ylim([1 size(a,1)]);
+		title('Connectivity');
+		yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+		pbaspect([1 1 1]);
+
+		% Histogram of component entropies
+		kax = subplot(2, 4, [1 2]); hold on;
+		histogram(entro.IC(j,:,1), 'BinWidth',sz, 'Normalization','Probability');
+		histogram(entro.IC(j,:,2), 'BinWidth',sz, 'Normalization','Probability');
+		legend(labels.Properties.VariableNames);
+		title('Entropy');
+		ylabel('Counts'); xlabel('Mean Entropy');
+
+		% Bar Plots
+		kax = subplot(2, 4, [5 8]); hold on;
+		if sum(sign(squeeze(memberships(:,j)))) >= 0
+			ind(:,1) = mships < -zthresh;	% select node weights which surpass threshold
+			ind(:,2) = mships > zthresh;	% select node weights which surpass threshold
+			ind(:,3) = mships > -zthresh & mships < 0;
+			ind(:,4) = mships < zthresh & mships > 0;
+			a = mships; a(~ind(:,1)) = 0; bar(1:N.ROI, a, 'b');
+			a = mships; a(~ind(:,2)) = 0; bar(1:N.ROI, a, 'r');
+			a = mships; a(~ind(:,3)) = 0; bar(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
+			a = mships; a(~ind(:,4)) = 0; bar(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
+		elseif sum(sign(squeeze(memberships(:,j)))) < 0
+			ind(:,1) = mships > zthresh;	% only plot node weights which surpass threshold
+			ind(:,2) = mships < -zthresh;	% only plot node weights which surpass threshold
+			ind(:,3) = mships < zthresh & mships > 0;
+			ind(:,4) = mships > -zthresh & mships < 0;
+			a = mships; a(~ind(:,1)) = 0; bar(1:N.ROI, a, 'b');
+			a = mships; a(~ind(:,2)) = 0; bar(1:N.ROI, a, 'r');
+			a = mships; a(~ind(:,3)) = 0; bar(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
+			a = mships; a(~ind(:,4)) = 0; bar(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
+		end
+		title(['z-score threshold: ' num2str(zthresh)]);
+		xticks(1:N.ROI); xticklabels(label_AAL90); xtickangle(-90);
+		xlabel('z-score');
 	end
 end
-for i = 1:N.IC
-	pspect.IC.dist(:,:,i) = squareform(pdist(squeeze(dummy.spect(i,:,:))'));
-	pgram.IC.dist(:,:,i) = squareform(pdist(squeeze(dummy.gram(i,:,:))'));
-end
-clear c s i ind dummy
+clear mships j hg sz f ind a
 
-% Compute mean, standard deviation of inter-subject distance
-pspect.IC.ave = mean(pspect.IC.dist, 3);
-pspect.IC.std = std(pspect.IC.dist, [], 3);
-pgram.IC.ave = mean(pgram.IC.dist, 3);
-pgram.IC.std = std(pgram.IC.dist, [], 3);
 
-% Visualize mean, standard deviations of spectral and periodogram distances
-figure; hold on;
-subplot(1,2,1); imagesc(pspect.IC.ave); colorbar; title('Average Spectral Distance between Subjects')
-subplot(1,2,2); imagesc(pspect.IC.std); colorbar; title('Standard Deviation in Spectral Distance between Subjects')
-figure; hold on;
-subplot(1,2,1); imagesc(pgram.IC.ave); colorbar; title('Average Periodogram Distance between Subjects')
-subplot(1,2,2); imagesc(pgram.IC.std); colorbar; title('Standard Deviation in Periodogram Distance between Subjects')
-
-% Separate into classes (control, patient, inter)
-pspect.IC.sect{1} = pspect.IC.dist(1:N.subjects(1), 1:N.subjects(1));
-pspect.IC.sect{2} = pspect.IC.dist(1:N.subjects(1), N.subjects(1)+1:sum(N.subjects));
-pspect.IC.sect{3} = pspect.IC.dist(N.subjects(1)+1:sum(N.subjects), N.subjects(1)+1:sum(N.subjects));
-pgram.IC.sect{1} = pgram.IC.dist(1:N.subjects(1), 1:N.subjects(1));
-pgram.IC.sect{2} = pgram.IC.dist(1:N.subjects(1), N.subjects(1)+1:sum(N.subjects));
-pgram.IC.sect{3} = pgram.IC.dist(N.subjects(1)+1:sum(N.subjects), N.subjects(1)+1:sum(N.subjects));
-
-% Compute KS distances between control, patient power spectra
-pat = reshape(pspect.IC.sect{1}, [1, numel(pspect.IC.sect{1})]);
-con = reshape(pspect.IC.sect{3}, [1, numel(pspect.IC.sect{3})]);
-inter = reshape(pspect.IC.sect{2}, [1, numel(pspect.IC.sect{2})]);
-[pspect.IC.h(1), pspect.IC.p(1), pspect.IC.ksdist(1)] = kstest2(con, pat);
-[pspect.IC.h(2), pspect.IC.p(2), pspect.IC.ksdist(2)] = kstest2(pat, inter);
-[pspect.IC.h(3), pspect.IC.p(3), pspect.IC.ksdist(3)] = kstest2(con, inter);
-
-% Visualize power spectral distances
-edges = 0:5:50;
-F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(2,3,1); histogram(pat, edges); title('Patient Spectral Distances'); subplot(2,3,2); histogram(con, edges); title('Control'); subplot(2,3,3); histogram(inter, edges); title('Inter');
-subplot(2,3,4); hold on; histogram(pat, edges); histogram(con, edges); title('Grouped Spectral Distances'); legend({'Patient', 'Control'});
-subplot(2,3,5); hold on; histogram(pat, edges); histogram(inter, edges); title('Grouped Spectral Distances'); legend({'Patient', 'Inter'});
-subplot(2,3,6); hold on; histogram(con, edges); histogram(inter, edges); title('Grouped Spectral Distances'); legend({'Control', 'Inter'});
-clear con pat inter edges
-
-% Compute KS distances between control, patient power periodograms
-pat = reshape(pgram.IC.sect{1}, [1, numel(pgram.IC.sect{1})]);
-con = reshape(pgram.IC.sect{3}, [1, numel(pgram.IC.sect{3})]);
-inter = reshape(pgram.IC.sect{2}, [1, numel(pgram.IC.sect{2})]);
-[pgram.IC.h(1), pgram.IC.p(1), pgram.IC.ksdist(1)] = kstest2(con, pat);
-[pgram.IC.h(2), pgram.IC.p(2), pgram.IC.ksdist(2)] = kstest2(pat, inter);
-[pgram.IC.h(3), pgram.IC.p(3), pgram.IC.ksdist(3)] = kstest2(con, inter);
-
-% Visualize periodogram distances
-edges = 0:50:1500;
-F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(2,3,1); histogram(pat, edges); title('Patient Periodogram Distances'); subplot(2,3,2); histogram(con, edges); title('Control Periodogram Distances'); subplot(2,3,3); histogram(inter, edges); title('Inter Periodogram Distances');
-subplot(2,3,4); hold on; histogram(pat, edges); histogram(con, edges); title('Grouped Periodogram Distances'); legend({'Patient', 'Control'});
-subplot(2,3,5); hold on; histogram(pat, edges); histogram(inter, edges); title('Grouped Periodogram Distances'); legend({'Patient', 'Inter'});
-subplot(2,3,6); hold on; histogram(con, edges); histogram(inter, edges); title('Grouped Periodogram Distances'); legend({'Control', 'Inter'});
-clear con pat inter
+%% Power spectral and periodogram analysis of ICs
+% 
+% % Compute FCD of subject-level ICs
+% for c = 1:N.conditions
+% 	for s = 1:N.subjects(c)
+% 		pspect.IC.subj{s,c} = pspectrum(activities.subj{s,c}', 1/T.TR)';
+% 		pgram.IC.subj{s,c} = periodogram(activities.subj{s,c}', [], [], 1/T.TR)';
+% 	end
+% end
+% clear c s i
+% 
+% % Compute Euclidean distances between subject power spectra, periodograms
+% dummy.spect = nan(N.IC, size(pspect.IC.subj{1,1},2), sum(N.subjects));
+% dummy.gram = nan(N.IC, size(pgram.IC.subj{1,1},2), sum(N.subjects));
+% pspect.IC.dist = nan(sum(N.subjects), sum(N.subjects), N.IC);
+% pgram.IC.dist = nan(sum(N.subjects), sum(N.subjects), N.IC);
+% ind = 0;
+% for c = 1:N.conditions
+% 	for s = 1:N.subjects(c)
+% 		ind = ind+1;
+% 		dummy.spect(:,:,ind) = pspect.IC.subj{s,c};
+% 		dummy.gram(:,:,ind) = pgram.IC.subj{s,c};
+% 	end
+% end
+% for i = 1:N.IC
+% 	pspect.IC.dist(:,:,i) = squareform(pdist(squeeze(dummy.spect(i,:,:))'));
+% 	pgram.IC.dist(:,:,i) = squareform(pdist(squeeze(dummy.gram(i,:,:))'));
+% end
+% clear c s i ind dummy
+% 
+% % Compute mean, standard deviation of inter-subject distance
+% pspect.IC.ave = mean(pspect.IC.dist, 3);
+% pspect.IC.std = std(pspect.IC.dist, [], 3);
+% pgram.IC.ave = mean(pgram.IC.dist, 3);
+% pgram.IC.std = std(pgram.IC.dist, [], 3);
+% 
+% % Visualize mean, standard deviations of spectral and periodogram distances
+% figure; hold on;
+% subplot(1,2,1); imagesc(pspect.IC.ave); colorbar; title('Average Spectral Distance between Subjects')
+% subplot(1,2,2); imagesc(pspect.IC.std); colorbar; title('Standard Deviation in Spectral Distance between Subjects')
+% figure; hold on;
+% subplot(1,2,1); imagesc(pgram.IC.ave); colorbar; title('Average Periodogram Distance between Subjects')
+% subplot(1,2,2); imagesc(pgram.IC.std); colorbar; title('Standard Deviation in Periodogram Distance between Subjects')
+% 
+% % Separate into classes (control, patient, inter)
+% pspect.IC.sect{1} = pspect.IC.dist(1:N.subjects(1), 1:N.subjects(1));
+% pspect.IC.sect{2} = pspect.IC.dist(1:N.subjects(1), N.subjects(1)+1:sum(N.subjects));
+% pspect.IC.sect{3} = pspect.IC.dist(N.subjects(1)+1:sum(N.subjects), N.subjects(1)+1:sum(N.subjects));
+% pgram.IC.sect{1} = pgram.IC.dist(1:N.subjects(1), 1:N.subjects(1));
+% pgram.IC.sect{2} = pgram.IC.dist(1:N.subjects(1), N.subjects(1)+1:sum(N.subjects));
+% pgram.IC.sect{3} = pgram.IC.dist(N.subjects(1)+1:sum(N.subjects), N.subjects(1)+1:sum(N.subjects));
+% 
+% % Compute KS distances between control, patient power spectra
+% pat = reshape(pspect.IC.sect{1}, [1, numel(pspect.IC.sect{1})]);
+% con = reshape(pspect.IC.sect{3}, [1, numel(pspect.IC.sect{3})]);
+% inter = reshape(pspect.IC.sect{2}, [1, numel(pspect.IC.sect{2})]);
+% [pspect.IC.h(1), pspect.IC.p(1), pspect.IC.ksdist(1)] = kstest2(con, pat);
+% [pspect.IC.h(2), pspect.IC.p(2), pspect.IC.ksdist(2)] = kstest2(pat, inter);
+% [pspect.IC.h(3), pspect.IC.p(3), pspect.IC.ksdist(3)] = kstest2(con, inter);
+% 
+% % Visualize power spectral distances
+% edges = 0:5:50;
+% F(N.fig) = figure; hold on; N.fig = N.fig+1;
+% subplot(2,3,1); histogram(pat, edges); title('Patient Spectral Distances'); subplot(2,3,2); histogram(con, edges); title('Control'); subplot(2,3,3); histogram(inter, edges); title('Inter');
+% subplot(2,3,4); hold on; histogram(pat, edges); histogram(con, edges); title('Grouped Spectral Distances'); legend({'Patient', 'Control'});
+% subplot(2,3,5); hold on; histogram(pat, edges); histogram(inter, edges); title('Grouped Spectral Distances'); legend({'Patient', 'Inter'});
+% subplot(2,3,6); hold on; histogram(con, edges); histogram(inter, edges); title('Grouped Spectral Distances'); legend({'Control', 'Inter'});
+% clear con pat inter edges
+% 
+% % Compute KS distances between control, patient power periodograms
+% pat = reshape(pgram.IC.sect{1}, [1, numel(pgram.IC.sect{1})]);
+% con = reshape(pgram.IC.sect{3}, [1, numel(pgram.IC.sect{3})]);
+% inter = reshape(pgram.IC.sect{2}, [1, numel(pgram.IC.sect{2})]);
+% [pgram.IC.h(1), pgram.IC.p(1), pgram.IC.ksdist(1)] = kstest2(con, pat);
+% [pgram.IC.h(2), pgram.IC.p(2), pgram.IC.ksdist(2)] = kstest2(pat, inter);
+% [pgram.IC.h(3), pgram.IC.p(3), pgram.IC.ksdist(3)] = kstest2(con, inter);
+% 
+% % Visualize periodogram distances
+% edges = 0:50:1500;
+% F(N.fig) = figure; hold on; N.fig = N.fig+1;
+% subplot(2,3,1); histogram(pat, edges); title('Patient Periodogram Distances'); subplot(2,3,2); histogram(con, edges); title('Control Periodogram Distances'); subplot(2,3,3); histogram(inter, edges); title('Inter Periodogram Distances');
+% subplot(2,3,4); hold on; histogram(pat, edges); histogram(con, edges); title('Grouped Periodogram Distances'); legend({'Patient', 'Control'});
+% subplot(2,3,5); hold on; histogram(pat, edges); histogram(inter, edges); title('Grouped Periodogram Distances'); legend({'Patient', 'Inter'});
+% subplot(2,3,6); hold on; histogram(con, edges); histogram(inter, edges); title('Grouped Periodogram Distances'); legend({'Control', 'Inter'});
+% clear con pat inter
 
 
 %% Compute coherence
-
-% Construct temporary index of activities
-dummy = nan(N.IC, T.scan, sum(N.subjects));
-i = 0;
-for c = 1:N.conditions
-	for s = 1:N.subjects(c)
-		i = i+1;
-		dummy(:,:,i) = activities.subj{s,c};
-	end
-end
-clear c s i
-
-% Find all possible pairings
-coms = nchoosek(1:sum(N.subjects), 2);
-
-% Test all possible pairwise coherences
-coherence = cell(length(coms), 1);
-for c = 1:length(coms)
-	coherence{c} = mscohere(squeeze(dummy(:,:,coms(c,1)))', squeeze(dummy(:,:,coms(c,2)))')';
-end
-clear c dummy
-
-% Split coherence matrices into groups
-pat = nan(size(coherence{1})); ip = 0;
-con = nan(size(coherence{1})); ic = 0;
-inter = nan(size(coherence{1})); ii = 0;
-for c = 1:length(coms)
-	if coms(c,1) <= N.subjects(1) && coms(c,2) <= N.subjects(1)
-		ip = ip+1;
-		pat(:,:,ip) = coherence{c};
-	elseif coms(c,1) > N.subjects(1) && coms(c,2) > N.subjects(1)
-		ic = ic+1;
-		con(:,:,ic) = coherence{c};
-	else
-		ii = ii+1;
-		inter(:,:,ii) = coherence{c};
-	end
-end
-clear c ip ic ii
-
-% Compile into structure
-clear coherence;
-coherence.pat = pat;
-coherence.con = con;
-coherence.inter = inter;
-clear pat inter con
-
-% Visualize coherence averages, standard deviations
-F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(3,2,1); imagesc(mean(coherence.pat, 3)); colorbar; title('Average Inter-Patient Coherence'); ylabel('IC'); xlabel('Frequency');
-subplot(3,2,2); imagesc(var(coherence.pat, [], 3)); colorbar; title('Variance of Inter-Patient Coherence'); ylabel('IC'); xlabel('Frequency');
-subplot(3,2,3); imagesc(mean(coherence.con, 3)); colorbar; title('Average Inter-Control Coherence'); ylabel('IC'); xlabel('Frequency');
-subplot(3,2,4); imagesc(var(coherence.con, [], 3)); colorbar; title('Variance of Inter-Control Coherence'); ylabel('IC'); xlabel('Frequency');
-subplot(3,2,5); imagesc(mean(coherence.inter, 3)); colorbar; title('Average Inter-Group Coherence'); ylabel('IC'); xlabel('Frequency');
-subplot(3,2,6); imagesc(var(coherence.inter, [], 3)); colorbar; title('Variance of Inter-Group Coherence'); ylabel('IC'); xlabel('Frequency');
+% 
+% % Construct temporary index of activities
+% dummy = nan(N.IC, T.scan, sum(N.subjects));
+% i = 0;
+% for c = 1:N.conditions
+% 	for s = 1:N.subjects(c)
+% 		i = i+1;
+% 		dummy(:,:,i) = activities.subj{s,c};
+% 	end
+% end
+% clear c s i
+% 
+% % Find all possible pairings
+% coms = nchoosek(1:sum(N.subjects), 2);
+% 
+% % Test all possible pairwise coherences
+% coherence = cell(length(coms), 1);
+% for c = 1:length(coms)
+% 	coherence{c} = mscohere(squeeze(dummy(:,:,coms(c,1)))', squeeze(dummy(:,:,coms(c,2)))')';
+% end
+% clear c dummy
+% 
+% % Split coherence matrices into groups
+% pat = nan(size(coherence{1})); ip = 0;
+% con = nan(size(coherence{1})); ic = 0;
+% inter = nan(size(coherence{1})); ii = 0;
+% for c = 1:length(coms)
+% 	if coms(c,1) <= N.subjects(1) && coms(c,2) <= N.subjects(1)
+% 		ip = ip+1;
+% 		pat(:,:,ip) = coherence{c};
+% 	elseif coms(c,1) > N.subjects(1) && coms(c,2) > N.subjects(1)
+% 		ic = ic+1;
+% 		con(:,:,ic) = coherence{c};
+% 	else
+% 		ii = ii+1;
+% 		inter(:,:,ii) = coherence{c};
+% 	end
+% end
+% clear c ip ic ii
+% 
+% % Compile into structure
+% clear coherence;
+% coherence.pat = pat;
+% coherence.con = con;
+% coherence.inter = inter;
+% clear pat inter con
+% 
+% % Visualize coherence averages, standard deviations
+% F(N.fig) = figure; hold on; N.fig = N.fig+1;
+% subplot(3,2,1); imagesc(mean(coherence.pat, 3)); colorbar; title('Average Inter-Patient Coherence'); ylabel('IC'); xlabel('Frequency');
+% subplot(3,2,2); imagesc(var(coherence.pat, [], 3)); colorbar; title('Variance of Inter-Patient Coherence'); ylabel('IC'); xlabel('Frequency');
+% subplot(3,2,3); imagesc(mean(coherence.con, 3)); colorbar; title('Average Inter-Control Coherence'); ylabel('IC'); xlabel('Frequency');
+% subplot(3,2,4); imagesc(var(coherence.con, [], 3)); colorbar; title('Variance of Inter-Control Coherence'); ylabel('IC'); xlabel('Frequency');
+% subplot(3,2,5); imagesc(mean(coherence.inter, 3)); colorbar; title('Average Inter-Group Coherence'); ylabel('IC'); xlabel('Frequency');
+% subplot(3,2,6); imagesc(var(coherence.inter, [], 3)); colorbar; title('Variance of Inter-Group Coherence'); ylabel('IC'); xlabel('Frequency');
 
 
 %% Compare IC metrics between conditions, vs. permuted null distribution
@@ -514,8 +715,10 @@ for t = 1:numel(ttype)
 	sig.BOLD(t) = robustTests(cell2mat(BOLD(:,1)'), cell2mat(BOLD(:,2)'), N.ROI, 'p',pval.target, 'testtype',ttype{t});				% Compare ROI time series
 	sig.dFC(t) = robustTests(dFC.cond{1}, dFC.cond{2}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttype{t});					% Compare dFC time series
 	sig.IC(t) = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});					% Compare IC time series
-	sig.entro.IC(t) = robustTests(squeeze(entro.all(:,:,1)), squeeze(entro.all(:,:,2)), N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC entropies
+	sig.entro.IC(t) = robustTests(squeeze(entro.IC(:,:,1)), squeeze(entro.IC(:,:,2)), N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC entropies
 	sig.entro.BOLD(t) = robustTests(squeeze(entro.BOLD(:,:,1)), squeeze(entro.BOLD(:,:,2)), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD entropies
+	sig.fcomp.IC(t) = robustTests(squeeze(fcomp.IC(:,:,1)), squeeze(fcomp.IC(:,:,2)), N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC functional complexities
+	sig.fcomp.BOLD(t) = robustTests(squeeze(fcomp.BOLD(:,:,1)), squeeze(fcomp.BOLD(:,:,2)), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD functional complexities
 end
 clear con pat t
 
@@ -529,19 +732,6 @@ if sig.metastable.BOLD(2).p < 0.05
 	sig.metastable.BOLD(2).h = 1;
 else
 	sig.metastable.BOLD(2).h = 0;
-end
-clear con pat
-
-% Subject PH metastabilities
-disp('Running permutation tests on metastability.');
-con = metastable.PH{:,'Control'}(isfinite(metastable.PH{:,'Control'}));
-pat = metastable.PH{:,'Patient'}(isfinite(metastable.PH{:,'Patient'}));
-[sig.metastable.PH(1).h, sig.metastable.PH(1).p, sig.metastable.PH(1).effsize] = kstest2(con, pat);
-[sig.metastable.PH(2).p, ~, sig.metastable.PH(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
-if sig.metastable.PH(2).p < 0.05
-	sig.metastable.PH(2).h = 1;
-else
-	sig.metastable.PH(2).h = 0;
 end
 clear con pat
 
@@ -586,14 +776,40 @@ clear con pat
 
 % IC entropies
 disp('Running permutation tests on entropy.');
-con = entro.IC{:,'Control'}(isfinite(entro.IC{:,'Control'}));
-pat = entro.IC{:,'Patient'}(isfinite(entro.IC{:,'Patient'}));
+con = entro.mIC{:,'Control'}(isfinite(entro.mIC{:,'Control'}));
+pat = entro.mIC{:,'Patient'}(isfinite(entro.mIC{:,'Patient'}));
 [sig.entro.meanIC(1).h, sig.entro.meanIC(1).p, sig.entro.meanIC(1).effsize] = kstest2(con, pat);
 [sig.entro.meanIC(2).p, ~, sig.entro.meanIC(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
 if sig.entro.meanIC(2).p < 0.05
 	sig.entro.meanIC(2).h = 1;
 else
 	sig.entro.meanIC(2).h = 0;
+end
+clear con pat
+
+% Subject functional complexities
+disp('Running permutation tests on entropy.');
+con = fcomp.subj{:,'Control'}(isfinite(fcomp.subj{:,'Control'}));
+pat = fcomp.subj{:,'Patient'}(isfinite(fcomp.subj{:,'Patient'}));
+[sig.fcomp.meansubj(1).h, sig.fcomp.meansubj(1).p, sig.fcomp(1).meansubj.effsize] = kstest2(con, pat);
+[sig.fcomp.meansubj(2).p, ~, sig.fcomp.meansubj(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+if sig.fcomp.meansubj(2).p < 0.05
+	sig.fcomp.meansubj(2).h = 1;
+else
+	sig.fcomp.meansubj(2).h = 0;
+end
+clear con pat
+
+% IC functional complexities
+disp('Running permutation tests on entropy.');
+con = fcomp.mIC{:,'Control'}(isfinite(fcomp.mIC{:,'Control'}));
+pat = fcomp.mIC{:,'Patient'}(isfinite(fcomp.mIC{:,'Patient'}));
+[sig.fcomp.mIC(1).h, sig.fcomp.mIC(1).p, sig.fcomp.mIC(1).effsize] = kstest2(con, pat);
+[sig.fcomp.mIC(2).p, ~, sig.fcomp.mIC(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
+if sig.fcomp.mIC(2).p < 0.05
+	sig.fcomp.mIC(2).h = 1;
+else
+	sig.fcomp.mIC(2).h = 0;
 end
 clear con pat
 

@@ -13,6 +13,35 @@
 
 %% SETUP
 
+clear; close all; clc
+
+% Find general path (enclosing folder of current directory)
+path{1} = strsplit(pwd, '/');
+path{2,1} = strjoin(path{1}(1:end-2),'/');
+path{3,1} = strjoin(path{1}(1:end-1),'/');
+path{1,1} = strjoin(path{1}(1:end-3),'/');
+
+% Set required subdirectories
+path{4,1} = fullfile(path{2}, 'OCD', 'Data');
+path{5,1} = fullfile(path{2}, 'OCD', 'Results');
+path{6,1} = fullfile(path{2}, 'OCD', 'Results','LEICA');
+
+% Add relevant paths
+fpath{1,1} = fullfile(path{1},'MATLAB','spm12');
+fpath{2,1} = fullfile(path{1},'MATLAB','FastICA');
+fpath{3,1} = fullfile(path{1},'MATLAB','permutationTest');
+fpath{4,1} = fullfile(path{2},'Functions');
+fpath{5,1} = fullfile(path{3},'Functions');
+for k = 1:numel(fpath)-1
+	addpath(fpath{k});
+end
+addpath(genpath(fpath{numel(fpath)}));
+clear fpath k
+
+% Load data
+load(fullfile(path{4}, 'sc90.mat'));
+load(fullfile(path{6}, 'LEICA90_CIC_COS_WideBand_k1_Iteration2.mat'));
+
 % Set N.fig
 N.fig = 1;
 
@@ -24,8 +53,8 @@ N.fig = 1;
 F(N.fig) = figure;
 N.fig = N.fig+1;
 subplot(1,3,1); imagesc(sc90); title('Structural');
-subplot(1,3,1); imagesc(squeeze(mean(FC(:,:,:,1),3,'omitnan'))); title('Mean FC: Patients');
-subplot(1,3,1); imagesc(squeeze(mean(FC(:,:,:,2),3,'omitnan'))); title('Mean FC: Controls');
+subplot(1,3,2); imagesc(squeeze(mean(FC(:,:,:,1),3,'omitnan'))); title('Mean FC: Patients');
+subplot(1,3,3); imagesc(squeeze(mean(FC(:,:,:,2),3,'omitnan'))); title('Mean FC: Controls');
 
 
 
@@ -33,10 +62,10 @@ subplot(1,3,1); imagesc(squeeze(mean(FC(:,:,:,2),3,'omitnan'))); title('Mean FC:
 
 % Visualize assembly activation magnitude histograms
 F(N.fig) = figure;
-for ass = 1:N.assemblies
-	subplot(3, ceil(N.assemblies/3), ass);
+for ass = 1:N.IC
+	subplot(3, ceil(N.IC/3), ass);
 	for c = 1:N.conditions
-		histogram(activities.cond.TS{c}(ass,:)); hold on;
+		histogram(activities.cond{c}(ass,:)); hold on;
 	end
 	legend('Controls','Patients');
 	title(['Assembly ', num2str(ass), ' Activation Magnitudes']);
@@ -49,8 +78,8 @@ clear ass c
 % Visualize means, standard deviations of IC activation magnitudes per condition
 F(N.fig) = figure; N.fig = N.fig + 1;
 bar(table2array(activities.av.cond)); hold on;
-errorbar((1:N.assemblies)-0.15, activities.av.cond{:,'Controls'}, activities.sd.cond{:,'Controls'}, '.b');
-errorbar((1:N.assemblies)+0.15, activities.av.cond{:,'Patients'}, activities.sd.cond{:,'Patients'}, '.r');
+errorbar((1:N.IC)-0.15, activities.av.cond{:,'Controls'}, activities.sd.cond{:,'Controls'}, '.b');
+errorbar((1:N.IC)+0.15, activities.av.cond{:,'Patients'}, activities.sd.cond{:,'Patients'}, '.r');
 legend('Controls','Patients');
 title('Mean Assembly Activation Magnitude');
 xlabel('Assembly');
@@ -223,19 +252,19 @@ clear c
 
 %% Save results
 
-% Get file list
-fList = dir(fullfile(path{8}, strcat(fileName, '*')));
-
-% Find number of previous iterations
-nIter = numel(fList);
-clear fList
-
-% Edit fileName
-fileName = strcat(fileName, '_Iteration', num2str(nIter));
-clear nIter
-
-% Save figures
-savefig(F, fullfile(path{8}, fileName), 'compact')
-clear metricFig
+% % Get file list
+% fList = dir(fullfile(path{8}, strcat(fileName, '*')));
+% 
+% % Find number of previous iterations
+% nIter = numel(fList);
+% clear fList
+% 
+% % Edit fileName
+% fileName = strcat(fileName, '_Iteration', num2str(nIter));
+% clear nIter
+% 
+% % Save figures
+% savefig(F, fullfile(path{8}, fileName), 'compact')
+% clear metricFig
 
 

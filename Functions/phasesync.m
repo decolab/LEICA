@@ -1,4 +1,4 @@
-function [phBOLD, iPH] = phasesync(BOLD, N, T, bfilt, afilt, aType)
+function [phBOLD, iFC] = phasesync(BOLD, N, T, bfilt, afilt, aType)
 %% PHASESYNC computes the phase angle and dFC of the BOLD time series.
 %	
 
@@ -10,10 +10,10 @@ if isempty(aType)
 end
 
 % Compute phase of BOLD time series
-phBOLD = phaseTS(BOLD, N, T, bfilt, afilt);
+[~,~,phBOLD] = phaseTS(BOLD, N, T, bfilt, afilt);
 
 % Compute leading eigenvector of time series
-iPH = LEdFC(phBOLD, 'distType', aType.dist, 'compressType', aType.compress, 'N', N, 'T', T);
+iFC = LEdFC(phBOLD, 'distType', aType.dist, 'compressType', aType.compress, 'N', N, 'T', T);
 
 end
 
