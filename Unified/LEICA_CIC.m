@@ -157,9 +157,10 @@ label_AAL90 = string(LR_version_symm(label90));
 clear aal_cog label90
 
 % Extract indices for BOLD signals of patients, controls
+label_groups = ["Controls","OCD"];
 I(:,1) = ~ismember(fName, patientData{:, 'Code'});
 I(:,2) = ismember(fName, patientData{:, 'Code'});
-I = array2table(I, 'VariableNames',{'Controls','OCD'});
+I = array2table(I, 'VariableNames', label_groups);
 
 % Set number of conditions
 N.conditions = size(I,2);
@@ -174,7 +175,7 @@ labels = cell(max(N.subjects), N.conditions);
 for c = 1:N.conditions
 	labels(1:nnz(I{:,c}), c) = fName(I{:,c});
 end
-labels = cell2table(labels, 'VariableNames',{'Control','Patient'});
+labels = cell2table(labels, 'VariableNames', label_groups);
 clear c fName
 
 % Filter signal
@@ -335,13 +336,6 @@ for c = 1:N.conditions
 	end
 end
 clear c s i
-F(N.fig) = figure; hold on; N.fig = N.fig+1; colormap jet
-subplot(2,2, 1); imagesc(FCD.IC.subj{1,1}); colorbar; title(['LEICA FCD of Control ', num2str(1)]);
-subplot(2,2, 2); imagesc(FCD.IC.subj{1,2}); colorbar; title(['LEICA FCD of Patient ', num2str(1)]);
-subplot(2,2, [3 4]); hold on;
-histogram(cell2mat(FCD.IC.subj(:,1))', 'Normalization','Probability');
-histogram(cell2mat(FCD.IC.subj(:,2))', 'Normalization','Probability');
-legend(labels.Properties.VariableNames);
 
 % Compute correlation between static FC, weighted component average
 d = nan(N.ROI, N.ROI, N.IC);
@@ -408,153 +402,14 @@ fcomp.subj = squeeze(mean(fcomp.IC, 1, 'omitnan'));
 fcomp.mIC = squeeze(mean(fcomp.IC, 2, 'omitnan'));
 
 % Convert metrics to table format
-metastable.BOLD = array2table(metastable.BOLD, 'VariableNames', labels.Properties.VariableNames);
-metastable.dFC = array2table(metastable.dFC, 'VariableNames', labels.Properties.VariableNames);
-metastable.IC = array2table(metastable.IC, 'VariableNames', labels.Properties.VariableNames);
-entro.subj = array2table(entro.subj, 'VariableNames', labels.Properties.VariableNames);
-entro.mIC = array2table(entro.mIC, 'VariableNames', labels.Properties.VariableNames);
-fcomp.subj = array2table(fcomp.subj, 'VariableNames', labels.Properties.VariableNames);
-fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', labels.Properties.VariableNames);
+metastable.BOLD = array2table(metastable.BOLD, 'VariableNames', label_groups);
+metastable.dFC = array2table(metastable.dFC, 'VariableNames', label_groups);
+metastable.IC = array2table(metastable.IC, 'VariableNames', label_groups);
+entro.subj = array2table(entro.subj, 'VariableNames', label_groups);
+entro.mIC = array2table(entro.mIC, 'VariableNames', label_groups);
+fcomp.subj = array2table(fcomp.subj, 'VariableNames', label_groups);
+fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', label_groups);
 
-
-
-%% Comparisons
-
-%   FCD
-
-% Compute KS distances between control, patient dFC FCD
-pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(1),1)), [N.subjects(1)*175^2, 1]);
-con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(2),2)), [N.subjects(2)*175^2, 1]);
-[FCD.dFC.h, FCD.dFC.p, FCD.dFC.ksdist] = kstest2(con, pat);
-
-% Visualize dFC FCD
-F(N.fig) = figure; hold on; N.fig = N.fig+1; colormap jet
-subplot(2,2, 1); imagesc(FCD.dFC.subj{1,1}); colorbar; title(['dFC FCD of Control ', num2str(1)]);
-subplot(2,2, 2); imagesc(FCD.dFC.subj{1,2}); colorbar; title(['dFC FCD of Patient ', num2str(1)]);
-subplot(2,2, [3 4]); hold on; histogram(pat); histogram(con); legend({'Patient', 'Control'});
-clear con pat
-
-% Compute KS distances between control, patient FCD
-con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(1),1)), [N.subjects(1)*175^2, 1]);
-pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(2),2)), [N.subjects(2)*175^2, 1]);
-[FCD.IC.h, FCD.IC.p, FCD.IC.ksdist] = kstest2(con, pat);
-clear con pat
-
-
-%   Entropy & Metastability
-
-% Get bin sizes
-f = figure; hold on;
-hg{1} = histogram(metastable.dFC{:, labels.Properties.VariableNames{1}}, 'Normalization','probability');
-hg{2} = histogram(metastable.dFC{:, labels.Properties.VariableNames{2}}, 'Normalization','probability');
-sz(1) = min(hg{1}.BinWidth, hg{2}.BinWidth);
-hg{1} = histogram(metastable.IC{:, labels.Properties.VariableNames{1}}, 'Normalization','probability');
-hg{2} = histogram(metastable.IC{:, labels.Properties.VariableNames{2}}, 'Normalization','probability');
-sz(2) = min(hg{1}.BinWidth, hg{2}.BinWidth);
-close(f); clear hg f
-
-% Visualize IC metrics
-F(N.fig) = figure; hold on; title('Metastability'); N.fig = N.fig+1;
-subplot(1,2,1); hold on;
-histogram(metastable.dFC{:,'Patient'}, 'BinWidth',sz(1), 'Normalization','probability');
-histogram(metastable.dFC{:,'Control'}, 'BinWidth',sz(1), 'Normalization','probability');
-legend('Patients', 'Controls');
-title('dFC Metastability');
-subplot(1,2,2); hold on;
-histogram(metastable.IC{:,'Patient'}, 'BinWidth',sz(2), 'Normalization','probability');
-histogram(metastable.IC{:,'Control'}, 'BinWidth',sz(2), 'Normalization','probability');
-legend('Patients', 'Controls');
-title('IC Metastability');
-
-
-% Get bin sizes
-f = figure; hold on;
-hg{1} = histogram(entro.subj{:, labels.Properties.VariableNames{1}}, 'Normalization','probability');
-hg{2} = histogram(entro.subj{:, labels.Properties.VariableNames{2}}, 'Normalization','probability');
-sz(1) = min(hg{1}.BinWidth, hg{2}.BinWidth);
-hg{1} = histogram(entro.mIC{:, labels.Properties.VariableNames{1}}, 'Normalization','probability');
-hg{2} = histogram(entro.mIC{:, labels.Properties.VariableNames{2}}, 'Normalization','probability');
-sz(2) = min(hg{1}.BinWidth, hg{2}.BinWidth);
-close(f); clear hg
-
-% Visualize mean entropy distributions
-F(N.fig) = figure; hold on; title('Entropy'); N.fig = N.fig+1;
-for c = 1:numel(labels.Properties.VariableNames)
-	subplot(1,2,1); hold on;
-	histogram(entro.subj{:, labels.Properties.VariableNames{c}}, 'BinWidth',sz(1), 'Normalization','probability');
-	legend(labels.Properties.VariableNames);
-	title('Mean Subject Entropy');
-	
-	subplot(1,2,2); hold on;
-	histogram(entro.mIC{:, labels.Properties.VariableNames{c}}, 'BinWidth',sz(2), 'Normalization','probability');
-	legend(labels.Properties.VariableNames);
-	title('Mean IC Entropy');
-end
-clear sz
-
-
-% Visualize IC memberships
-if strcmpi(aType.compress, 'none')
-	for j = 1:N.IC
-
-		% Get bin sizes
-		f = figure; hold on;
-		hg{1} = histogram(entro.IC(j,:,1));
-		hg{2} = histogram(entro.IC(j,:,2));
-		sz = min(hg{1}.BinWidth, hg{2}.BinWidth);
-		close(f);
-
-		% Scale memberships (optional)
-		mships = zscore(memberships(:,j));
-
-		% Open figure
-		F(nFig) = figure; nFig = nFig + 1; hold on;
-
-		% Connectivity
-		kax = subplot(2, 4, [3 4]); hold on;
-		sgtitle(['Component ', num2str(j)]);
-		a = squeeze(memberships(:,j))*squeeze(memberships(:,j))';
-		imagesc(a); colorbar; hold on;
-		xlim([1 size(a,2)]); ylim([1 size(a,1)]);
-		title('Connectivity');
-		yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
-		pbaspect([1 1 1]);
-
-		% Histogram of component entropies
-		kax = subplot(2, 4, [1 2]); hold on;
-		histogram(entro.IC(j,:,1), 'BinWidth',sz, 'Normalization','Probability');
-		histogram(entro.IC(j,:,2), 'BinWidth',sz, 'Normalization','Probability');
-		legend(labels.Properties.VariableNames);
-		title('Entropy');
-		ylabel('Counts'); xlabel('Mean Entropy');
-
-		% Bar Plots
-		kax = subplot(2, 4, [5 8]); hold on;
-		if sum(sign(squeeze(memberships(:,j)))) >= 0
-			ind(:,1) = mships < -zthresh;	% select node weights which surpass threshold
-			ind(:,2) = mships > zthresh;	% select node weights which surpass threshold
-			ind(:,3) = mships > -zthresh & mships < 0;
-			ind(:,4) = mships < zthresh & mships > 0;
-			a = mships; a(~ind(:,1)) = 0; bar(1:N.ROI, a, 'b');
-			a = mships; a(~ind(:,2)) = 0; bar(1:N.ROI, a, 'r');
-			a = mships; a(~ind(:,3)) = 0; bar(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
-			a = mships; a(~ind(:,4)) = 0; bar(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
-		elseif sum(sign(squeeze(memberships(:,j)))) < 0
-			ind(:,1) = mships > zthresh;	% only plot node weights which surpass threshold
-			ind(:,2) = mships < -zthresh;	% only plot node weights which surpass threshold
-			ind(:,3) = mships < zthresh & mships > 0;
-			ind(:,4) = mships > -zthresh & mships < 0;
-			a = mships; a(~ind(:,1)) = 0; bar(1:N.ROI, a, 'b');
-			a = mships; a(~ind(:,2)) = 0; bar(1:N.ROI, a, 'r');
-			a = mships; a(~ind(:,3)) = 0; bar(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
-			a = mships; a(~ind(:,4)) = 0; bar(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
-		end
-		title(['z-score threshold: ' num2str(zthresh)]);
-		xticks(1:N.ROI); xticklabels(label_AAL90); xtickangle(-90);
-		xlabel('z-score');
-	end
-end
-clear mships j hg sz f ind a
 
 
 %% Power spectral and periodogram analysis of ICs
@@ -704,114 +559,281 @@ clear mships j hg sz f ind a
 
 %% Compare IC metrics between conditions, vs. permuted null distribution
 
+% Determine all possible pairwise comparisons
+C = nchoosek(1:N.conditions, 2);
+N.comp = size(C,1);
+
 % Define test types
 ttype = {'kstest2', 'permutation'};
 
-% Test with Kolmogorov-Smirnov, permutation test
-for t = 1:numel(ttype)
-	disp(['Running ', ttype{t}, ' tests.']);
-	
-	% Compare activations between conditions
-	sig.BOLD(t) = robustTests(cell2mat(BOLD(:,1)'), cell2mat(BOLD(:,2)'), N.ROI, 'p',pval.target, 'testtype',ttype{t});				% Compare ROI time series
-	sig.dFC(t) = robustTests(dFC.cond{1}, dFC.cond{2}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttype{t});					% Compare dFC time series
-	sig.IC(t) = robustTests(activities.cond{1}, activities.cond{2}, N.IC, 'p',pval.target, 'testtype',ttype{t});					% Compare IC time series
-	sig.entro.IC(t) = robustTests(squeeze(entro.IC(:,:,1)), squeeze(entro.IC(:,:,2)), N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC entropies
-	sig.entro.BOLD(t) = robustTests(squeeze(entro.BOLD(:,:,1)), squeeze(entro.BOLD(:,:,2)), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD entropies
-	sig.fcomp.IC(t) = robustTests(squeeze(fcomp.IC(:,:,1)), squeeze(fcomp.IC(:,:,2)), N.IC, 'p',pval.target, 'testtype',ttype{t});	% Compare IC functional complexities
-	sig.fcomp.BOLD(t) = robustTests(squeeze(fcomp.BOLD(:,:,1)), squeeze(fcomp.BOLD(:,:,2)), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD functional complexities
-end
-clear con pat t
+% Loop through all pairwise comparisons
+for c = 1:N.comp
+    
+    % Test with Kolmogorov-Smirnov, permutation test
+    for t = 1:numel(ttype)
+        disp(['Running ', ttype{t}, ' tests.']);
 
-% Subject BOLD metastabilities
-disp('Running permutation tests on metastability.');
-con = metastable.BOLD{:,'Control'}(isfinite(metastable.BOLD{:,'Control'}));
-pat = metastable.BOLD{:,'Patient'}(isfinite(metastable.BOLD{:,'Patient'}));
-[sig.metastable.BOLD(1).h, sig.metastable.BOLD(1).p, sig.metastable.BOLD(1).effsize] = kstest2(con, pat);
-[sig.metastable.BOLD(2).p, ~, sig.metastable.BOLD(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
-if sig.metastable.BOLD(2).p < 0.05
-	sig.metastable.BOLD(2).h = 1;
-else
-	sig.metastable.BOLD(2).h = 0;
-end
-clear con pat
+        % Compare activations
+        sig.BOLD(c,t) = robustTests(cell2mat(BOLD(:,C(c,1))'), cell2mat(BOLD(:,C(c,2))'), N.ROI, 'p',pval.target, 'testtype',ttype{t});				% Compare ROI time series
+        sig.dFC(c,t) = robustTests(dFC.cond{C(c,1)}, dFC.cond{C(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttype{t});					% Compare dFC time series
+        sig.IC(c,t) = robustTests(activities.cond{C(c,1)}, activities.cond{C(c,2)}, N.IC, 'p',pval.target, 'testtype',ttype{t});					% Compare IC time series
+        
+        % Compare entropies
+        sig.entro.IC(c,t) = robustTests(squeeze(entro.IC(:,:,C(c,1))), squeeze(entro.IC(:,:,C(c,2))), N.IC, 'p',pval.target, 'testtype',ttype{t});          % Compare IC entropies
+        sig.entro.BOLD(c,t) = robustTests(squeeze(entro.BOLD(:,:,C(c,1))), squeeze(entro.BOLD(:,:,C(c,2))), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD entropies
+        
+        % Compare complexities
+        sig.fcomp.IC(c,t) = robustTests(squeeze(fcomp.IC(:,:,C(c,1))), squeeze(fcomp.IC(:,:,C(c,2))), N.IC, 'p',pval.target, 'testtype',ttype{t});          % Compare IC functional complexities
+        sig.fcomp.BOLD(c,t) = robustTests(squeeze(fcomp.BOLD(:,:,C(c,1))), squeeze(fcomp.BOLD(:,:,C(c,2))), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD functional complexities
+    end
+    
+    % Compare dFC FCD distributions
+    disp('Comparing dFC FCD.');
+    pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(C(c,1)),C(c,1))), [N.subjects(C(c,1))*175^2, 1]);
+    con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(C(c,2)),C(c,2))), [N.subjects(C(c,2))*175^2, 1]);
+    [FCD.dFC.h(c,1), FCD.dFC.p(c,1), FCD.dFC.effsize(c,1)] = kstest2(con, pat);
+    [FCD.dFC.p(c,2), ~, FCD.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    if FCD.dFC.p(c,2) < pval.target
+        FCD.dFC.h(c,2) = 1;
+    else
+        FCD.dFC.h(c,2) = 0;
+    end
+    
+    % Compare IC FCD distributions
+    disp('Comparing IC FCD.');
+    con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,1)),C(c,1))), [N.subjects(C(c,1))*175^2, 1]);
+    pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,2)),C(c,2))), [N.subjects(C(c,2))*175^2, 1]);
+    [FCD.IC.h(c,1), FCD.IC.p(c,1), FCD.IC.effsize(c,1)] = kstest2(con, pat);
+    [FCD.IC.p(c,2), ~, FCD.ID.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    if FCD.IC.p(c,2) < pval.target
+        FCD.IC.h(c,2) = 1;
+    else
+        FCD.IC.h(c,2) = 0;
+    end
+    
+    % Compare subject BOLD metastabilities
+    disp('Comparing BOLD metastability.');
+    con = metastable.BOLD{:,label_groups(C(c,1))}(isfinite(metastable.BOLD{:,label_groups(C(c,1))}));
+    pat = metastable.BOLD{:,label_groups(C(c,2))}(isfinite(metastable.BOLD{:,label_groups(C(c,2))}));
+    [sig.metastable.BOLD.h(c,1), sig.metastable.BOLD.p(c,1), sig.metastable.BOLD.effsize(c,1)] = kstest2(con, pat);
+    [sig.metastable.BOLD.p(c,2), ~, sig.metastable.BOLD.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    if sig.metastable.BOLD.p(c,2) < pval.target
+        sig.metastable.BOLD.h(c,2) = 1;
+    else
+        sig.metastable.BOLD.h(c,2) = 0;
+    end
 
-% Subject dFC metastabilities
-disp('Running permutation tests on metastability.');
-con = metastable.dFC{:,'Control'}(isfinite(metastable.dFC{:,'Control'}));
-pat = metastable.dFC{:,'Patient'}(isfinite(metastable.dFC{:,'Patient'}));
-[sig.metastable.dFC(1).h, sig.metastable.dFC(1).p, sig.metastable.dFC(1).effsize] = kstest2(con, pat);
-[sig.metastable.dFC(2).p, ~, sig.metastable.dFC(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
-if sig.metastable.dFC(2).p < 0.05
-	sig.metastable.dFC(2).h = 1;
-else
-	sig.metastable.dFC(2).h = 0;
-end
-clear con pat
+    % Compare subject dFC metastabilities
+    disp('Comparing dFC metastability.');
+    con = metastable.dFC{:,label_groups(C(c,1))}(isfinite(metastable.dFC{:,label_groups(C(c,1))}));
+    pat = metastable.dFC{:,label_groups(C(c,2))}(isfinite(metastable.dFC{:,label_groups(C(c,2))}));
+    [sig.metastable.dFC.h(c,1), sig.metastable.dFC.p(c,1), sig.metastable.dFC.effsize(c,1)] = kstest2(con, pat);
+    [sig.metastable.dFC.p(c,2), ~, sig.metastable.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    if sig.metastable.dFC.p(c,2) < pval.target
+        sig.metastable.dFC.h(c,2) = 1;
+    else
+        sig.metastable.dFC.h(c,2) = 0;
+    end
 
-% Subject IC metastabilities
-disp('Running permutation tests on metastability.');
-con = metastable.IC{:,'Control'}(isfinite(metastable.IC{:,'Control'}));
-pat = metastable.IC{:,'Patient'}(isfinite(metastable.IC{:,'Patient'}));
-[sig.metastable.IC(1).h, sig.metastable.IC(1).p, sig.metastable.IC(1).effsize] = kstest2(con, pat);
-[sig.metastable.IC(2).p, ~, sig.metastable.IC(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
-if sig.metastable.IC(2).p < 0.05
-	sig.metastable.IC(2).h = 1;
-else
-	sig.metastable.IC(2).h = 0;
-end
-clear con pat
+    % Subject IC metastabilities
+    disp('Comparing component metastability.');
+    con = metastable.IC{:,label_groups(C(c,1))}(isfinite(metastable.IC{:,label_groups(C(c,1))}));
+    pat = metastable.IC{:,label_groups(C(c,2))}(isfinite(metastable.IC{:,label_groups(C(c,2))}));
+    [sig.metastable.IC.h(c,1), sig.metastable.IC.p(c,1), sig.metastable.IC.effsize(c,1)] = kstest2(con, pat);
+    [sig.metastable.IC.p(c,2), ~, sig.metastable.IC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    if sig.metastable.IC.p(c,2) < pval.target
+        sig.metastable.IC.h(c,2) = 1;
+    else
+        sig.metastable.IC.h(c,2) = 0;
+    end
 
-% Subject entropies
-disp('Running permutation tests on entropy.');
-con = entro.subj{:,'Control'}(isfinite(entro.subj{:,'Control'}));
-pat = entro.subj{:,'Patient'}(isfinite(entro.subj{:,'Patient'}));
-[sig.entro.meansubj(1).h, sig.entro.meansubj(1).p, sig.entro(1).meansubj.effsize] = kstest2(con, pat);
-[sig.entro.meansubj(2).p, ~, sig.entro.meansubj(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
-if sig.entro.meansubj(2).p < 0.05
-	sig.entro.meansubj(2).h = 1;
-else
-	sig.entro.meansubj(2).h = 0;
-end
-clear con pat
+    % Subject entropies
+    disp('Comparing subject entropies.');
+    con = entro.subj{:,label_groups(C(c,1))}(isfinite(entro.subj{:,label_groups(C(c,1))}));
+    pat = entro.subj{:,label_groups(C(c,2))}(isfinite(entro.subj{:,label_groups(C(c,2))}));
+    [sig.entro.meansubj.h(c,1), sig.entro.meansubj.p(c,1), sig.entro.meansubj.effsize(c,1)] = kstest2(con, pat);
+    [sig.entro.meansubj.p(c,2), ~, sig.entro.meansubj.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    if sig.entro.meansubj.p(c,2) < pval.target
+        sig.entro.meansubj.h(c,2) = 1;
+    else
+        sig.entro.meansubj.h(c,2) = 0;
+    end
 
-% IC entropies
-disp('Running permutation tests on entropy.');
-con = entro.mIC{:,'Control'}(isfinite(entro.mIC{:,'Control'}));
-pat = entro.mIC{:,'Patient'}(isfinite(entro.mIC{:,'Patient'}));
-[sig.entro.meanIC(1).h, sig.entro.meanIC(1).p, sig.entro.meanIC(1).effsize] = kstest2(con, pat);
-[sig.entro.meanIC(2).p, ~, sig.entro.meanIC(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
-if sig.entro.meanIC(2).p < 0.05
-	sig.entro.meanIC(2).h = 1;
-else
-	sig.entro.meanIC(2).h = 0;
-end
-clear con pat
+    % IC entropies
+    disp('Comparing component entropies.');
+    con = entro.mIC{:,label_groups(C(c,1))}(isfinite(entro.mIC{:,label_groups(C(c,1))}));
+    pat = entro.mIC{:,label_groups(C(c,2))}(isfinite(entro.mIC{:,label_groups(C(c,2))}));
+    [sig.entro.meanIC.h(c,1), sig.entro.meanIC.p(c,1), sig.entro.meanIC.effsize(c,1)] = kstest2(con, pat);
+    [sig.entro.meanIC.p(c,2), ~, sig.entro.meanIC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    if sig.entro.meanIC.p(c,2) < pval.target
+        sig.entro.meanIC.h(c,2) = 1;
+    else
+        sig.entro.meanIC.h(c,2) = 0;
+    end
 
-% Subject functional complexities
-disp('Running permutation tests on entropy.');
-con = fcomp.subj{:,'Control'}(isfinite(fcomp.subj{:,'Control'}));
-pat = fcomp.subj{:,'Patient'}(isfinite(fcomp.subj{:,'Patient'}));
-[sig.fcomp.meansubj(1).h, sig.fcomp.meansubj(1).p, sig.fcomp(1).meansubj.effsize] = kstest2(con, pat);
-[sig.fcomp.meansubj(2).p, ~, sig.fcomp.meansubj(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
-if sig.fcomp.meansubj(2).p < 0.05
-	sig.fcomp.meansubj(2).h = 1;
-else
-	sig.fcomp.meansubj(2).h = 0;
-end
-clear con pat
+    % Subject functional complexities
+    disp('Comparing subject functional complexity.');
+    con = fcomp.subj{:,label_groups(C(c,1))}(isfinite(fcomp.subj{:,label_groups(C(c,1))}));
+    pat = fcomp.subj{:,label_groups(C(c,2))}(isfinite(fcomp.subj{:,label_groups(C(c,2))}));
+    [sig.fcomp.meansubj.h(c,1), sig.fcomp.meansubj.p(c,1), sig.fcomp.meansubj.effsize(c,1)] = kstest2(con, pat);
+    [sig.fcomp.meansubj.p(c,2), ~, sig.fcomp.meansubj.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    if sig.fcomp.meansubj.p(c,2) < pval.target
+        sig.fcomp.meansubj.h(c,2) = 1;
+    else
+        sig.fcomp.meansubj.h(c,2) = 0;
+    end
 
-% IC functional complexities
-disp('Running permutation tests on entropy.');
-con = fcomp.mIC{:,'Control'}(isfinite(fcomp.mIC{:,'Control'}));
-pat = fcomp.mIC{:,'Patient'}(isfinite(fcomp.mIC{:,'Patient'}));
-[sig.fcomp.mIC(1).h, sig.fcomp.mIC(1).p, sig.fcomp.mIC(1).effsize] = kstest2(con, pat);
-[sig.fcomp.mIC(2).p, ~, sig.fcomp.mIC(2).effsize] = permutationTest(con, pat, 10000, 'sidedness','both');
-if sig.fcomp.mIC(2).p < 0.05
-	sig.fcomp.mIC(2).h = 1;
-else
-	sig.fcomp.mIC(2).h = 0;
+    % IC functional complexities
+    disp('Comparing component functional complexity.');
+    con = fcomp.mIC{:,label_groups(C(c,1))}(isfinite(fcomp.mIC{:,label_groups(C(c,1))}));
+    pat = fcomp.mIC{:,label_groups(C(c,2))}(isfinite(fcomp.mIC{:,label_groups(C(c,2))}));
+    [sig.fcomp.meanIC.h(c,1), sig.fcomp.meanIC.p(c,1), sig.fcomp.meanIC.effsize(c,1)] = kstest2(con, pat);
+    [sig.fcomp.meanIC.p(c,2), ~, sig.fcomp.meanIC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    if sig.fcomp.meanIC.p(c,2) < pval.target
+        sig.fcomp.meanIC.h(c,2) = 1;
+    else
+        sig.fcomp.meanIC.h(c,2) = 0;
+    end
 end
-clear con pat
+clear con pat t c
+
+
+%% Visualize FCD Distributions
+
+% Visualize dFC FCD
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
+ax(2,1) = subplot(2, N.conditions, 1:N.conditions); hold on;
+for c = 1:N.conditions
+    histogram(ax(2,1), cell2mat(FCD.dFC.subj(1:N.subjects(c),c)), 'Normalization','probability');	% FCD histograms
+    ax(1,c) = subplot(2, N.conditions, c); colormap jet             % FCD matrix
+    imagesc(ax(1,c), FCD.dFC.subj{1,c}); colorbar; title(["dFC FCD of ", label_groups(c), num2str(1)]);
+end
+legend(ax(2,1), label_groups);  % FCD histogram legend
+clear ax c
+
+% Visualize IC dFC
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
+ax(2,1) = subplot(2, N.conditions, 1:N.conditions); hold on;
+for c = 1:N.conditions
+    histogram(ax(2,1), cell2mat(FCD.IC.subj(1:N.subjects(c),c)), 'Normalization','probability');	% FCD histograms
+    ax(1,c) = subplot(2, N.conditions, c); colormap jet             % FCD matrix
+    imagesc(ax(1,c), FCD.IC.subj{1,c}); colorbar; title(["IC FCD of ", label_groups(c), num2str(1)]);
+end
+legend(ax(2,1), label_groups);  % FCD histogram legend
+clear ax c
+
+
+%% Visualize Metastability Distributions
+
+% Get metastability bin sizes
+f = figure; hold on;
+hg{1} = histogram(metastable.dFC{:, label_groups(1)}, 'Normalization','probability');
+hg{2} = histogram(metastable.dFC{:, label_groups(2)}, 'Normalization','probability');
+sz(1) = min(hg{1}.BinWidth, hg{2}.BinWidth);
+hg{1} = histogram(metastable.IC{:, label_groups(1)}, 'Normalization','probability');
+hg{2} = histogram(metastable.IC{:, label_groups(2)}, 'Normalization','probability');
+sz(2) = min(hg{1}.BinWidth, hg{2}.BinWidth);
+close(f); clear hg f
+
+% Visualize metastability
+F(N.fig) = figure; hold on; sgtitle('Metastability'); N.fig = N.fig+1;
+ax(1) = subplot(1,2,1); hold on; title('dFC Metastability');
+ax(2) = subplot(1,2,2); hold on; title('IC Metastability');
+for c = 1:N.conditions
+    histogram(ax(1), metastable.dFC{:,label_groups(c)}, 'BinWidth',sz(1), 'Normalization','probability');
+    histogram(ax(2), metastable.IC{:,label_groups(c)}, 'BinWidth',sz(2), 'Normalization','probability');
+end
+legend(ax(1), label_groups);
+legend(ax(2), label_groups);
+
+
+%% Visualize Entropy Distributions
+
+% Get entropy bin sizes
+f = figure; hold on;
+hg{1} = histogram(entro.subj{:, label_groups(1)}, 'Normalization','probability');
+hg{2} = histogram(entro.subj{:, label_groups(2)}, 'Normalization','probability');
+sz(1) = min(hg{1}.BinWidth, hg{2}.BinWidth);
+hg{1} = histogram(entro.mIC{:, label_groups(1)}, 'Normalization','probability');
+hg{2} = histogram(entro.mIC{:, label_groups(2)}, 'Normalization','probability');
+sz(2) = min(hg{1}.BinWidth, hg{2}.BinWidth);
+close(f); clear hg f
+
+% Visualize entropy
+F(N.fig) = figure; hold on; sgtitle('Entropy'); N.fig = N.fig+1;
+ax(1) = subplot(1,2,1); hold on; title('Mean per Subject');
+ax(2) = subplot(1,2,2); hold on; title('Mean Per IC');
+for c = 1:N.conditions
+    histogram(ax(1), entro.subj{:, label_groups(c)}, 'BinWidth',sz(1), 'Normalization','probability');
+	histogram(ax(2), entro.mIC{:, label_groups(c)}, 'BinWidth',sz(2), 'Normalization','probability');
+end
+legend(ax(1), label_groups);
+legend(ax(2), label_groups);
+clear sz
+
+
+%% Visualize IC memberships
+if strcmpi(aType.compress, 'none')
+	for j = 1:N.IC
+
+		% Get bin sizes
+		f = figure; hold on;
+		hg{1} = histogram(entro.IC(j,:,1));
+		hg{2} = histogram(entro.IC(j,:,2));
+		sz = min(hg{1}.BinWidth, hg{2}.BinWidth);
+		close(f);
+
+		% Scale memberships (optional)
+		mships = zscore(memberships(:,j));
+
+		% Open figure
+		F(nFig) = figure; nFig = nFig + 1; hold on;
+
+		% Connectivity
+		kax = subplot(2, 4, [3 4]); hold on;
+		sgtitle(['Component ', num2str(j)]);
+		a = squeeze(memberships(:,j))*squeeze(memberships(:,j))';
+		imagesc(a); colorbar; hold on;
+		xlim([1 size(a,2)]); ylim([1 size(a,1)]);
+		title('Connectivity');
+		yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+		pbaspect([1 1 1]);
+
+		% Histogram of component entropies
+		kax = subplot(2, 4, [1 2]); hold on;
+		histogram(entro.IC(j,:,1), 'BinWidth',sz, 'Normalization','Probability');
+		histogram(entro.IC(j,:,2), 'BinWidth',sz, 'Normalization','Probability');
+		legend(labels.Properties.VariableNames);
+		title('Entropy');
+		ylabel('Counts'); xlabel('Mean Entropy');
+
+		% Bar Plots
+		kax = subplot(2, 4, [5 8]); hold on;
+		if sum(sign(squeeze(memberships(:,j)))) >= 0
+			ind(:,1) = mships < -zthresh;	% select node weights which surpass threshold
+			ind(:,2) = mships > zthresh;	% select node weights which surpass threshold
+			ind(:,3) = mships > -zthresh & mships < 0;
+			ind(:,4) = mships < zthresh & mships > 0;
+			a = mships; a(~ind(:,1)) = 0; bar(1:N.ROI, a, 'b');
+			a = mships; a(~ind(:,2)) = 0; bar(1:N.ROI, a, 'r');
+			a = mships; a(~ind(:,3)) = 0; bar(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
+			a = mships; a(~ind(:,4)) = 0; bar(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
+		elseif sum(sign(squeeze(memberships(:,j)))) < 0
+			ind(:,1) = mships > zthresh;	% only plot node weights which surpass threshold
+			ind(:,2) = mships < -zthresh;	% only plot node weights which surpass threshold
+			ind(:,3) = mships < zthresh & mships > 0;
+			ind(:,4) = mships > -zthresh & mships < 0;
+			a = mships; a(~ind(:,1)) = 0; bar(1:N.ROI, a, 'b');
+			a = mships; a(~ind(:,2)) = 0; bar(1:N.ROI, a, 'r');
+			a = mships; a(~ind(:,3)) = 0; bar(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
+			a = mships; a(~ind(:,4)) = 0; bar(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
+		end
+		title(['z-score threshold: ' num2str(zthresh)]);
+		xticks(1:N.ROI); xticklabels(label_AAL90); xtickangle(-90);
+		xlabel('z-score');
+	end
+end
+clear mships j hg sz f ind a
 
 
 %% Save results
