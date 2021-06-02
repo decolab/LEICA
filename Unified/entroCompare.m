@@ -164,9 +164,9 @@ for t = 1:numel(titles)
 			
 			% Pairwise comparisons between conditions
             for c = 1:N{t,s}.comp
-                cond{1} = mEntro{t,s,d}{:,labels{C(c,1)}}(isfinite(mEntro{t,s,d}{:,labels{C(c,1)}}));
-                cond{2} = mEntro{t,s,d}{:,labels{C(c,2)}}(isfinite(mEntro{t,s,d}{:,labels{C(c,2)}}));
-                
+                for p = 1:size(C,2)
+                    cond{p} = mEntro{t,s,d}{:,labels{C(c,p)}}(isfinite(mEntro{t,s,d}{:,labels{C(c,p)}}));
+                end
                 [sig.av.h(t,s,d,c,1), sig.av.p(t,s,d,c,1), sig.av.effsize(t,s,d,c,1)] = kstest2(cond{1}, cond{2});
                 [sig.av.p(t,s,d,c,2), ~, sig.av.effsize(t,s,d,c,2)] = permutationTest(cond{1}, cond{2}, 10000, 'sidedness','both');
                 if sig.av.p(t,s,d,c,2) < 0.05
@@ -435,7 +435,8 @@ for e = 1:numel(titles)
                 plot(sign(sig.comp(e,s,t,c).tstat(h{e,s,t,c})).*max(abs(sig.comp(e,s,t,c).tstat)).*ones(numel(h{e,s,t,c}),1), h{e,s,t,c}, '*r');
                 title([titles{e}, ': ', ttype{t}, ', ', spaces{s}, ' space, ', labels(C(c,1)), ' vs. ', labels(C(c,2))]);
                 ylabel('Component'); xlabel('Effect Size');
-
+                
+                % Plot entropy distributions for signifcant separations
                 if ~isempty(h{e,s,t,c})
                     for j = 1:numel(h{e,s,t,c})
 
@@ -450,9 +451,7 @@ for e = 1:numel(titles)
                         if strncmpi(spaces{s}, 'IC', 2)
 
                             % Scale memberships (optional)
-                            if zscale == true
-                                mships = zscore(memberships{e});
-                            elseif zthresh
+                            if zscale == true || zthresh
                                 mships = zscore(memberships{e});
                             else
                                 mships = memberships{e};
@@ -560,8 +559,9 @@ for e = 1:numel(titles)
                         else
                             % Histogram of component entropies
                             K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
-                            histogram(entro{e,s}(h{e,s,t,c}(j), :, C(c,1)), 'BinWidth',sz, 'Normalization','Probability');
-                            histogram(entro{e,s}(h{e,s,t,c}(j), :, C(c,2)), 'BinWidth',sz, 'Normalization','Probability');
+                            for p = 1:size(C,2)
+                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C(c,p)), 'BinWidth',sz, 'Normalization','Probability');
+                            end
                             legend(labels(C(c,:)));
                             title(strjoin({'Entropy of', char(label_AAL90(h{e,s,t,c}(j))), 'in', spaces{s}, 'Space'}));
                             ylabel('Counts'); xlabel('Entropy');

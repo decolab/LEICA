@@ -578,10 +578,6 @@ for c = 1:N.comp
         sig.dFC(c,t) = robustTests(dFC.cond{C(c,1)}, dFC.cond{C(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttype{t});					% Compare dFC time series
         sig.IC(c,t) = robustTests(activities.cond{C(c,1)}, activities.cond{C(c,2)}, N.IC, 'p',pval.target, 'testtype',ttype{t});					% Compare IC time series
         
-        % Compare entropies
-        sig.entro.IC(c,t) = robustTests(squeeze(entro.IC(:,:,C(c,1))), squeeze(entro.IC(:,:,C(c,2))), N.IC, 'p',pval.target, 'testtype',ttype{t});          % Compare IC entropies
-        sig.entro.BOLD(c,t) = robustTests(squeeze(entro.BOLD(:,:,C(c,1))), squeeze(entro.BOLD(:,:,C(c,2))), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD entropies
-        
         % Compare complexities
         sig.fcomp.IC(c,t) = robustTests(squeeze(fcomp.IC(:,:,C(c,1))), squeeze(fcomp.IC(:,:,C(c,2))), N.IC, 'p',pval.target, 'testtype',ttype{t});          % Compare IC functional complexities
         sig.fcomp.BOLD(c,t) = robustTests(squeeze(fcomp.BOLD(:,:,C(c,1))), squeeze(fcomp.BOLD(:,:,C(c,2))), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD functional complexities
@@ -647,30 +643,6 @@ for c = 1:N.comp
         sig.metastable.IC.h(c,2) = 0;
     end
 
-    % Subject entropies
-    disp('Comparing subject entropies.');
-    con = entro.subj{:,label_groups(C(c,1))}(isfinite(entro.subj{:,label_groups(C(c,1))}));
-    pat = entro.subj{:,label_groups(C(c,2))}(isfinite(entro.subj{:,label_groups(C(c,2))}));
-    [sig.entro.meansubj.h(c,1), sig.entro.meansubj.p(c,1), sig.entro.meansubj.effsize(c,1)] = kstest2(con, pat);
-    [sig.entro.meansubj.p(c,2), ~, sig.entro.meansubj.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
-    if sig.entro.meansubj.p(c,2) < pval.target
-        sig.entro.meansubj.h(c,2) = 1;
-    else
-        sig.entro.meansubj.h(c,2) = 0;
-    end
-
-    % IC entropies
-    disp('Comparing component entropies.');
-    con = entro.mIC{:,label_groups(C(c,1))}(isfinite(entro.mIC{:,label_groups(C(c,1))}));
-    pat = entro.mIC{:,label_groups(C(c,2))}(isfinite(entro.mIC{:,label_groups(C(c,2))}));
-    [sig.entro.meanIC.h(c,1), sig.entro.meanIC.p(c,1), sig.entro.meanIC.effsize(c,1)] = kstest2(con, pat);
-    [sig.entro.meanIC.p(c,2), ~, sig.entro.meanIC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
-    if sig.entro.meanIC.p(c,2) < pval.target
-        sig.entro.meanIC.h(c,2) = 1;
-    else
-        sig.entro.meanIC.h(c,2) = 0;
-    end
-
     % Subject functional complexities
     disp('Comparing subject functional complexity.');
     con = fcomp.subj{:,label_groups(C(c,1))}(isfinite(fcomp.subj{:,label_groups(C(c,1))}));
@@ -711,7 +683,7 @@ end
 legend(ax(2,1), label_groups);  % FCD histogram legend
 clear ax c
 
-% Visualize IC dFC
+% Visualize IC FCD
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
 ax(2,1) = subplot(2, N.conditions, 1:N.conditions); hold on;
 for c = 1:N.conditions
@@ -745,31 +717,6 @@ for c = 1:N.conditions
 end
 legend(ax(1), label_groups);
 legend(ax(2), label_groups);
-
-
-%% Visualize Entropy Distributions
-
-% Get entropy bin sizes
-f = figure; hold on;
-hg{1} = histogram(entro.subj{:, label_groups(1)}, 'Normalization','probability');
-hg{2} = histogram(entro.subj{:, label_groups(2)}, 'Normalization','probability');
-sz(1) = min(hg{1}.BinWidth, hg{2}.BinWidth);
-hg{1} = histogram(entro.mIC{:, label_groups(1)}, 'Normalization','probability');
-hg{2} = histogram(entro.mIC{:, label_groups(2)}, 'Normalization','probability');
-sz(2) = min(hg{1}.BinWidth, hg{2}.BinWidth);
-close(f); clear hg f
-
-% Visualize entropy
-F(N.fig) = figure; hold on; sgtitle('Entropy'); N.fig = N.fig+1;
-ax(1) = subplot(1,2,1); hold on; title('Mean per Subject');
-ax(2) = subplot(1,2,2); hold on; title('Mean Per IC');
-for c = 1:N.conditions
-    histogram(ax(1), entro.subj{:, label_groups(c)}, 'BinWidth',sz(1), 'Normalization','probability');
-	histogram(ax(2), entro.mIC{:, label_groups(c)}, 'BinWidth',sz(2), 'Normalization','probability');
-end
-legend(ax(1), label_groups);
-legend(ax(2), label_groups);
-clear sz
 
 
 %% Visualize IC memberships
@@ -838,11 +785,11 @@ clear mships j hg sz f ind a
 
 %% Save results
 
-% Save figures
-if exist('F', 'var')
-	savefig(F, fullfile(path{6}, fileName), 'compact');
-	clear F
-end
-
-% Save all data
-save(fullfile(path{6}, fileName));
+% % Save figures
+% if exist('F', 'var')
+% 	savefig(F, fullfile(path{6}, fileName), 'compact');
+% 	clear F
+% end
+% 
+% % Save all data
+% save(fullfile(path{6}, fileName));
