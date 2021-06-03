@@ -28,17 +28,17 @@ zthresh = 0.5:0.2:1.5;
 zscale = false;
 
 % Load network labels
-label_AAL90 = load(fullfile(path{5}, 'AAL_labels'));
-label_AAL90 = string(label_AAL90.label90);
-label_AAL90 = strip(LR_version_symm(label_AAL90));
+labels_ROI = load(fullfile(path{5}, 'AAL_labels'));
+labels_ROI = string(labels_ROI.label90);
+labels_ROI = strip(LR_version_symm(labels_ROI));
 
 % Generate MNI coordinates
-coords_AAL90 = load(fullfile(path{5}, 'aal_cog.txt'), 'aal_cog');
-coords_AAL90 = LR_version_symm(coords_AAL90);
+coords_ROI = load(fullfile(path{5}, 'aal_cog.txt'), 'aal_cog');
+coords_ROI = LR_version_symm(coords_ROI);
 origin = [65 45.5 35];							% center origin
 MNIscale = 5.5/10;								% scale MNI coordinates
 sphereScale = 2.5;								% scale sphere size
-coords_AAL90 = MNIscale*coords_AAL90;			% scale MNI coordinates
+coords_ROI = MNIscale*coords_ROI;			% scale MNI coordinates
 clear label90 MNIscale
 
 % Set brain rendering parameters
@@ -467,7 +467,7 @@ for e = 1:numel(titles)
                                     a = squeeze(memberships{e}(:,h{e,s,t,c}(j)))*squeeze(memberships{e}(:,h{e,s,t,c}(j)))';
                                     imagesc(a); colorbar; hold on;
                                     xlim([1 size(a,2)]); ylim([1 size(a,1)]);
-                                    yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',label_AAL90, 'FontSize', 3); xticks([]);
+                                    yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 3); xticks([]);
                                     title("Connectivity", 'FontSize',16); pbaspect([1 1 1]);
 
                                     % Histogram of component entropies
@@ -480,7 +480,7 @@ for e = 1:numel(titles)
 
                                     % Brain Renderings
                                     kax = subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                                    plot_nodes_in_cortex(cortex, mships(:,h{e,s,t,c}(j)), coords_AAL90, origin, sphereScale, zthresh(z), [], cind, [], [], rdux);
+                                    plot_nodes_in_cortex(cortex, mships(:,h{e,s,t,c}(j)), coords_ROI, origin, sphereScale, zthresh(z), [], cind, [], [], rdux);
 
                                     % Bar Plots
                                     kax = subplot(numel(h{e,s,t,c})*2, 5, [1 6]); hold on;
@@ -503,7 +503,7 @@ for e = 1:numel(titles)
                                         a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,3)) = 0; barh(1:N{1,1}.comp, a, 'b', 'FaceAlpha',0.3);
                                         a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,4)) = 0; barh(1:N{1,1}.comp, a, 'r', 'FaceAlpha',0.3);
                                     end
-                                    yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',label_AAL90, 'FontSize', 6);
+                                    yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
                                     title("Component Membership", 'FontSize',16, 'Position',[5 93]);
                                     subtitle(['z-score threshold: ' num2str(zthresh(z))], 'FontSize',12, 'Position',[5 91]);
                                     xlabel('z-score', 'FontSize',12);
@@ -520,7 +520,7 @@ for e = 1:numel(titles)
                                 a = squeeze(memberships{e}(:,h{e,s,t,c}(j)))*squeeze(memberships{e}(:,h{e,s,t,c}(j)))';
                                 imagesc(a); colorbar; hold on;
                                 xlim([1 size(a,2)]); ylim([1 size(a,1)]);
-                                yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',label_AAL90, 'FontSize', 3); xticks([]);
+                                yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 3); xticks([]);
                                 title("Connectivity", 'FontSize',16); pbaspect([1 1 1]);
 
                                 % Histogram of component entropies
@@ -544,14 +544,14 @@ for e = 1:numel(titles)
                                     a = squeeze(mships(:,h{e,s,t,c}(j))); a(ind(:,1)) = 0; barh(1:N{1,1}.comp, a);
                                     a = squeeze(mships(:,h{e,s,t,c}(j))); a(ind(:,2)) = 0; barh(1:N{1,1}.comp, a, 'r');
                                 end
-                                yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',label_AAL90, 'FontSize', 6);
+                                yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
                                 title("Component Membership", 'FontSize',16, 'Position',[5 93]);
                                 subtitle(['z-score threshold: ' num2str(zthresh(z))], 'FontSize',12, 'Position',[5 91]);
                                 xlabel('z-score', 'FontSize',12);
 
                                 % Brain Renderings
                                 kax = subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                                plot_nodes_in_cortex(cortex, mships(:,h{e,s,t,c}(j)), coords_AAL90, origin, sphereScale, [], rdux);
+                                plot_nodes_in_cortex(cortex, mships(:,h{e,s,t,c}(j)), coords_ROI, origin, sphereScale, [], rdux);
 
                                 % Save as png file
                                 % saveas(K(kFig-1), strcat('entroCompare', fname, '_Z', join(split(num2str(zthresh(z)), '.'))), 'png');
@@ -563,7 +563,7 @@ for e = 1:numel(titles)
                                 histogram(entro{e,s}(h{e,s,t,c}(j), :, C(c,p)), 'BinWidth',sz, 'Normalization','Probability');
                             end
                             legend(labels(C(c,:)));
-                            title(strjoin({'Entropy of', char(label_AAL90(h{e,s,t,c}(j))), 'in', spaces{s}, 'Space'}));
+                            title(strjoin({'Entropy of', char(labels_ROI(h{e,s,t,c}(j))), 'in', spaces{s}, 'Space'}));
                             ylabel('Counts'); xlabel('Entropy');
 
                             % Save as png file

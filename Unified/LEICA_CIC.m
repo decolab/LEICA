@@ -1,4 +1,4 @@
-%% LEICA Extraction of Network States
+%% LEICA Analysis of Network States
 %	This script extracts and transforms neuroimaging data for ICA-based
 % comparisons of the network states.  The current script only computes
 % phase-based synchrony measures.  It is possible to compute synchrony
@@ -6,13 +6,12 @@
 % will only add complexity.
 
 
-%%	SETUP
+%%	SET UP FILE SYSTEM
 
 % Clear workspace
 clear; close all; clc
 
-% Shuffle random seed.  Necessary in array parallelization to avoid
-% repeating same random seed across arrays.
+% Shuffle random seed.  Necessary to avoid repeating random seeds across parallel computations.
 rng('shuffle');
 
 % Find general path (enclosing folder of current directory)
@@ -21,39 +20,86 @@ path{2,1} = strjoin(path{1}(1:end-2),'/');
 path{3,1} = strjoin(path{1}(1:end-1),'/');
 path{1,1} = strjoin(path{1}(1:end-3),'/');
 
-% Set required subdirectories
-path{4,1} = fullfile(path{2}, 'OCD', 'Data');
-path{5,1} = fullfile(path{2}, 'OCD', 'Results');
-path{6,1} = fullfile(path{2}, 'OCD', 'Results','LEICA');
+% Set data-specific subdirectories
+path{4,1} = fullfile(path{2}, 'UCLA');
+path{5,1} = fullfile(path{4}, 'Data');
+path{6,1} = fullfile(path{5}, 'Results', 'LEICA');
 
 % Add relevant paths
 fpath{1,1} = fullfile(path{1},'MATLAB','spm12');
 fpath{2,1} = fullfile(path{1},'MATLAB','FastICA');
 fpath{3,1} = fullfile(path{1},'MATLAB','permutationTest');
 fpath{4,1} = fullfile(path{2},'Functions');
-fpath{5,1} = fullfile(path{3},'Functions');
+fpath{5,1} = fullfile(path{2}, 'LEICA', 'Functions');
 for k = 1:numel(fpath)-1
 	addpath(fpath{k});
 end
 addpath(genpath(fpath{numel(fpath)}));
 clear fpath k
 
-% Load structural data
-load(fullfile(path{4}, 'sc90.mat'));
+% Set figure counter
+N.fig = 1;
 
-% Set methods
+
+%% Load data
+
+% Load formatted data
+load(fullfile(path{5}, 'formattedUCLA.mat'));
+
+% Indices for vectorizing lower triangle
+Isubdiag = find(triu(ones(N.ROI), 1));
+
+% Set figure counter
+N.fig = 1;
+
+
+%% Set analysis methods
+
+% Methods key
+aType.filter = 'wideband';	% determine which type of filter to use; highpass or bandpass
 aType.dist = 'cosine';	% for measuring distance: cosine or exponential
 aType.compress = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
-aType.filter = 'wideband';	% determine which type of filter to use; highpass or bandpass
 aType.segment = 'kmeans';		% determine which segmentation to use: ICA, k-means, or binary k-means (only assigns states as ON or OFF)
 
 % Set number of neighbors to search for in KNN
 co = HShannon_kNN_k_initialization(1);
 
+% Set hypothesis test parameters
+pval.target = 0.05;
+
+
+%% Set filename to save
+
+% Set base filename
+switch aType.compress
+	case {'LE', 'eigenvector'}
+		fileName = 'LE';
+	case 'average'
+		fileName = 'M';
+	otherwise
+		fileName = 'dFC';
+end
+switch aType.dist
+	case 'cosine'
+		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_COS');
+	case 'exponential'
+		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_EXP');
+end
+
+% Set iteration number
+fList = dir(fullfile(path{6}, strcat(fileName, '*')));	% Get file list
+nIter = numel(fList) + 1; clear fList;					% Find number of previous iterations
+
+% Set full filename
+fileName = strcat(fileName, '_', aType.filter, '_k', num2str(co.mult), '_Iteration', num2str(nIter));
+clear nIter
+
+
+%% Set filter
+
 % Set highpass or bandpass filter
-T.TR = 2.73;				% Repetition Time (seconds)
 fnq = 1/(2*T.TR);			% Nyquist frequency
-k = 2;						% 2nd order butterworth filter\
+k = 2;						% 2nd order butterworth filter
 switch aType.filter
     case 'bandpass'
         flp = 0.04;     % lowpass frequency of filter (Hz)
@@ -69,156 +115,18 @@ switch aType.filter
         Wn = flp/fnq;			% butterworth highpass non-dimensional frequency
         fType = 'high';
 end
-clear flp fhi
 
-% Set filename to save
-switch aType.compress
-	case {'LE', 'eigenvector'}
-		fileName = 'LE';
-	case 'average'
-		fileName = 'M';
-	otherwise
-		fileName = 'dFC';
-end
-switch aType.dist
-	case 'cosine'
-		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_COS');
-	case 'exponential'
-		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_EXP');
-end
-fileName = strcat(fileName, '_', aType.filter, '_k', num2str(co.mult));
-
-fList = dir(fullfile(path{6}, strcat(fileName, '*')));	% Get file list
-nIter = numel(fList) + 1; clear fList;						% Find number of previous iterations
-fileName = strcat(fileName, '_Iteration', num2str(nIter)); clear nIter	% Edit fileName
-
-% Define list of patients
-patientList = 'ClinicalData_OCD.xlsx';
-
-% Define files containing BOLD data
-loadDirectory = 'Subjects';
-loadFiles = 'P*';
-
-% Get file list
-fList = dir(fullfile(path{4}, loadDirectory, loadFiles));
-
-% Get number of files of interest
-nFiles = numel(fList);
-
-% Load patient data
-patientData = readtable(fullfile(path{4}, patientList));
-
-% Set data array sizes
-D = load(fullfile(path{4}, loadDirectory, fList(1).name))';
-N.ROI = size(D,1);
-T.scan = size(D,2);
-
-% Set data arrays
-subjectBOLD = nan(N.ROI, T.scan, nFiles);
-fName = cell(nFiles, 1);
-
-% Select ROIs of interest (if necessary)
-nROI = 90;
-dROI = N.ROI - nROI;
-I = [1:(nROI/2), (nROI/2+dROI+1):N.ROI]';
-
-% Get functional data
-for n = 1:nFiles
-	
-	% Rename files
-	D = strsplit(fList(n).name, '_');
-	fName{n} = D{1};
-	
-	% Visualize data being extracted
-	disp(['Extracting data for subject ', fName{n}, '.']);
-	
-	% Load data
-	subjectBOLD(:,:,n) = load(fullfile(path{4}, loadDirectory, fList(n).name))';
-	
-	% Convert LR-symmetric to LR-mirrored ordering
-	subjectBOLD(:,:,n) = LR_version_symm(subjectBOLD(:,:,n));
-	
-end
-clear D ans n loadDirectory loadFiles nFiles fList
-
-% Remove cerebellar regions
-if exist('I', 'var')
-	subjectBOLD = subjectBOLD(I,:,:);
-	N.ROI = size(subjectBOLD,1);
-	clear I
-end
-clear nROI dROI
-
-% Symmetrize node coordinates, labels
-load(fullfile(path{2},'Atlases','AAL','aal_cog.txt'));
-load(fullfile(path{2},'Atlases','AAL','AAL_labels.mat'));
-coords_AAL90 = LR_version_symm(aal_cog);
-label_AAL90 = string(LR_version_symm(label90));
-clear aal_cog label90
-
-% Extract indices for BOLD signals of patients, controls
-label_groups = ["Controls","OCD"];
-I(:,1) = ~ismember(fName, patientData{:, 'Code'});
-I(:,2) = ismember(fName, patientData{:, 'Code'});
-I = array2table(I, 'VariableNames', label_groups);
-
-% Set number of conditions
-N.conditions = size(I,2);
-
-% Find number of subjects in each condition
-for c = 1:N.conditions
-	N.subjects(c) = nnz(I{:,c});
-end
-
-% Extract labels for patients, controls
-labels = cell(max(N.subjects), N.conditions);
-for c = 1:N.conditions
-	labels(1:nnz(I{:,c}), c) = fName(I{:,c});
-end
-labels = cell2table(labels, 'VariableNames', label_groups);
-clear c fName
-
-% Filter signal
+% Define signal filter
 [bfilt,afilt] = butter(k,Wn,fType);
 clear fnq flp fhi Wn k fType
 
-% Indices for vectorizing lower triangle
-Isubdiag = find(triu(ones(N.ROI), 1));
 
-% Set hypothesis test parameters
-pval.target = 0.05;
-
-% Set figure counter
-N.fig = 1;
-
-
-
-%% Extract dFC
-
-% Preallocate data arrays
-
-% Separate time series and FC matrix by subject & by condition
-BOLD = cell(max(N.subjects), N.conditions);
-FC = nan(N.ROI, N.ROI, max(N.subjects), N.conditions);
-for c = 1:N.conditions
-	ts = subjectBOLD(:,:,logical(I{:,c}));
-	for s = 1:N.subjects(c)
-		BOLD{s,c} = squeeze(ts(:,:,s)); BOLD{s,c} = BOLD{s,c}(:, 1:T.scan);
-		FC(:,:,s,c) = corr(BOLD{s, c}');
-	end
-end
-clear c s ts subjectBOLD
-
-% Plot BOLD signals
-F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(2,2,1); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Patient BOLD');
-subplot(2,2,2); imagesc(cell2mat(BOLD(:,2)')); colorbar; title('Control BOLD');
-subplot(2,2,[3 4]); hold on; histogram(cell2mat(BOLD(:,1)')); histogram(cell2mat(BOLD(:,2)')); legend('Patient', 'Control');
+%% Compute dFC, FCD
 
 % Preallocate storage arrays
 PH = cell(max(N.subjects), N.conditions);
 dFC.subj = cell(max(N.subjects), N.conditions);
-T.index = nan(N.conditions, sum(N.subjects)*T.scan);
+T.index = nan(2, sum(N.subjects)*T.scan);
 t = zeros(2,1);
 
 % Compute subject-level BOLD phase and dFC
@@ -235,6 +143,12 @@ for c = 1:N.conditions
 end
 dFC.concat = cell2mat(dFC.cond);
 clear t s c afilt bfilt Isubdiag sc90
+
+% Plot BOLD signals
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
+subplot(2,2,1); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Patient BOLD');
+subplot(2,2,2); imagesc(cell2mat(BOLD(:,2)')); colorbar; title('Control BOLD');
+subplot(2,2,[3 4]); hold on; histogram(cell2mat(BOLD(:,1)')); histogram(cell2mat(BOLD(:,2)')); legend('Patient', 'Control');
 
 % Plot dFC signals
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
@@ -293,16 +207,16 @@ activities.subj = cell(max(N.subjects), N.conditions);
 meanActivity.cond = nan(N.IC, N.conditions);
 meanActivity.subj = nan(N.IC, N.conditions, max(N.subjects));
 for c = 1:N.conditions
-	I = T.index(2,:) == c;
-	activities.cond{c} = activities.concat(:,I);
+	i = T.index(2,:) == c;
+	activities.cond{c} = activities.concat(:,i);
 	for s = 1:N.subjects(c)
-		I = (T.index(2,:) == c & T.index(1,:) == s);
-		activities.subj{s,c} = activities.concat(:,I);
+		i = (T.index(2,:) == c & T.index(1,:) == s);
+		activities.subj{s,c} = activities.concat(:,i);
 		meanActivity.subj(:,c,s) = mean(activities.subj{s,c}, 2);
 	end
 	meanActivity.cond(:,c) = mean(activities.cond{c}, 2);
 end
-clear I s c
+clear i s c
 
 % Sort memberships by activation level and normalize weights
 [meanActivity.concat, i] = sort(meanActivity.concat, 1, 'descend');
@@ -357,7 +271,7 @@ rho = corrcoef(mean(d, 3), mean(FC, [3 4], 'omitnan'));
 F(N.fig) = figure; hold on; N.fig = N.fig+1; colormap jet
 subplot(1,2, 2); imagesc(mean(FC, [3 4], 'omitnan')); colorbar; title('Static FC');  xticks([]); yticks([]);
 subplot(1,2, 1); imagesc(mean(d,3)); colorbar;
-title('Weighted Motif Average'); yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+title('Weighted Motif Average'); yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
 clear c d i m
 
 
@@ -402,13 +316,13 @@ fcomp.subj = squeeze(mean(fcomp.IC, 1, 'omitnan'));
 fcomp.mIC = squeeze(mean(fcomp.IC, 2, 'omitnan'));
 
 % Convert metrics to table format
-metastable.BOLD = array2table(metastable.BOLD, 'VariableNames', label_groups);
-metastable.dFC = array2table(metastable.dFC, 'VariableNames', label_groups);
-metastable.IC = array2table(metastable.IC, 'VariableNames', label_groups);
-entro.subj = array2table(entro.subj, 'VariableNames', label_groups);
-entro.mIC = array2table(entro.mIC, 'VariableNames', label_groups);
-fcomp.subj = array2table(fcomp.subj, 'VariableNames', label_groups);
-fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', label_groups);
+metastable.BOLD = array2table(metastable.BOLD, 'VariableNames', groups);
+metastable.dFC = array2table(metastable.dFC, 'VariableNames', groups);
+metastable.IC = array2table(metastable.IC, 'VariableNames', groups);
+entro.subj = array2table(entro.subj, 'VariableNames', groups);
+entro.mIC = array2table(entro.mIC, 'VariableNames', groups);
+fcomp.subj = array2table(fcomp.subj, 'VariableNames', groups);
+fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', groups);
 
 
 
@@ -609,8 +523,8 @@ for c = 1:N.comp
     
     % Compare subject BOLD metastabilities
     disp('Comparing BOLD metastability.');
-    con = metastable.BOLD{:,label_groups(C(c,1))}(isfinite(metastable.BOLD{:,label_groups(C(c,1))}));
-    pat = metastable.BOLD{:,label_groups(C(c,2))}(isfinite(metastable.BOLD{:,label_groups(C(c,2))}));
+    con = metastable.BOLD{:,groups(C(c,1))}(isfinite(metastable.BOLD{:,groups(C(c,1))}));
+    pat = metastable.BOLD{:,groups(C(c,2))}(isfinite(metastable.BOLD{:,groups(C(c,2))}));
     [sig.metastable.BOLD.h(c,1), sig.metastable.BOLD.p(c,1), sig.metastable.BOLD.effsize(c,1)] = kstest2(con, pat);
     [sig.metastable.BOLD.p(c,2), ~, sig.metastable.BOLD.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.metastable.BOLD.p(c,2) < pval.target
@@ -621,8 +535,8 @@ for c = 1:N.comp
 
     % Compare subject dFC metastabilities
     disp('Comparing dFC metastability.');
-    con = metastable.dFC{:,label_groups(C(c,1))}(isfinite(metastable.dFC{:,label_groups(C(c,1))}));
-    pat = metastable.dFC{:,label_groups(C(c,2))}(isfinite(metastable.dFC{:,label_groups(C(c,2))}));
+    con = metastable.dFC{:,groups(C(c,1))}(isfinite(metastable.dFC{:,groups(C(c,1))}));
+    pat = metastable.dFC{:,groups(C(c,2))}(isfinite(metastable.dFC{:,groups(C(c,2))}));
     [sig.metastable.dFC.h(c,1), sig.metastable.dFC.p(c,1), sig.metastable.dFC.effsize(c,1)] = kstest2(con, pat);
     [sig.metastable.dFC.p(c,2), ~, sig.metastable.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.metastable.dFC.p(c,2) < pval.target
@@ -633,8 +547,8 @@ for c = 1:N.comp
 
     % Subject IC metastabilities
     disp('Comparing component metastability.');
-    con = metastable.IC{:,label_groups(C(c,1))}(isfinite(metastable.IC{:,label_groups(C(c,1))}));
-    pat = metastable.IC{:,label_groups(C(c,2))}(isfinite(metastable.IC{:,label_groups(C(c,2))}));
+    con = metastable.IC{:,groups(C(c,1))}(isfinite(metastable.IC{:,groups(C(c,1))}));
+    pat = metastable.IC{:,groups(C(c,2))}(isfinite(metastable.IC{:,groups(C(c,2))}));
     [sig.metastable.IC.h(c,1), sig.metastable.IC.p(c,1), sig.metastable.IC.effsize(c,1)] = kstest2(con, pat);
     [sig.metastable.IC.p(c,2), ~, sig.metastable.IC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.metastable.IC.p(c,2) < pval.target
@@ -645,8 +559,8 @@ for c = 1:N.comp
 
     % Subject functional complexities
     disp('Comparing subject functional complexity.');
-    con = fcomp.subj{:,label_groups(C(c,1))}(isfinite(fcomp.subj{:,label_groups(C(c,1))}));
-    pat = fcomp.subj{:,label_groups(C(c,2))}(isfinite(fcomp.subj{:,label_groups(C(c,2))}));
+    con = fcomp.subj{:,groups(C(c,1))}(isfinite(fcomp.subj{:,groups(C(c,1))}));
+    pat = fcomp.subj{:,groups(C(c,2))}(isfinite(fcomp.subj{:,groups(C(c,2))}));
     [sig.fcomp.meansubj.h(c,1), sig.fcomp.meansubj.p(c,1), sig.fcomp.meansubj.effsize(c,1)] = kstest2(con, pat);
     [sig.fcomp.meansubj.p(c,2), ~, sig.fcomp.meansubj.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.fcomp.meansubj.p(c,2) < pval.target
@@ -657,8 +571,8 @@ for c = 1:N.comp
 
     % IC functional complexities
     disp('Comparing component functional complexity.');
-    con = fcomp.mIC{:,label_groups(C(c,1))}(isfinite(fcomp.mIC{:,label_groups(C(c,1))}));
-    pat = fcomp.mIC{:,label_groups(C(c,2))}(isfinite(fcomp.mIC{:,label_groups(C(c,2))}));
+    con = fcomp.mIC{:,groups(C(c,1))}(isfinite(fcomp.mIC{:,groups(C(c,1))}));
+    pat = fcomp.mIC{:,groups(C(c,2))}(isfinite(fcomp.mIC{:,groups(C(c,2))}));
     [sig.fcomp.meanIC.h(c,1), sig.fcomp.meanIC.p(c,1), sig.fcomp.meanIC.effsize(c,1)] = kstest2(con, pat);
     [sig.fcomp.meanIC.p(c,2), ~, sig.fcomp.meanIC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.fcomp.meanIC.p(c,2) < pval.target
@@ -674,24 +588,24 @@ clear con pat t c
 
 % Visualize dFC FCD
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
-ax(2,1) = subplot(2, N.conditions, 1:N.conditions); hold on;
+ax(2,1) = subplot(2, N.conditions, N.conditions+1:2*N.conditions); hold on;
 for c = 1:N.conditions
     histogram(ax(2,1), cell2mat(FCD.dFC.subj(1:N.subjects(c),c)), 'Normalization','probability');	% FCD histograms
     ax(1,c) = subplot(2, N.conditions, c); colormap jet             % FCD matrix
-    imagesc(ax(1,c), FCD.dFC.subj{1,c}); colorbar; title(["dFC FCD of ", label_groups(c), num2str(1)]);
+    imagesc(ax(1,c), FCD.dFC.subj{1,c}); colorbar; title(["dFC FCD of ", groups(c), num2str(1)]);
 end
-legend(ax(2,1), label_groups);  % FCD histogram legend
+legend(ax(2,1), groups);  % FCD histogram legend
 clear ax c
 
 % Visualize IC FCD
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
-ax(2,1) = subplot(2, N.conditions, 1:N.conditions); hold on;
+ax(2,1) = subplot(2, N.conditions, N.conditions+1:2*N.conditions); hold on;
 for c = 1:N.conditions
     histogram(ax(2,1), cell2mat(FCD.IC.subj(1:N.subjects(c),c)), 'Normalization','probability');	% FCD histograms
     ax(1,c) = subplot(2, N.conditions, c); colormap jet             % FCD matrix
-    imagesc(ax(1,c), FCD.IC.subj{1,c}); colorbar; title(["IC FCD of ", label_groups(c), num2str(1)]);
+    imagesc(ax(1,c), FCD.IC.subj{1,c}); colorbar; title(["IC FCD of ", groups(c), num2str(1)]);
 end
-legend(ax(2,1), label_groups);  % FCD histogram legend
+legend(ax(2,1), groups);  % FCD histogram legend
 clear ax c
 
 
@@ -699,11 +613,11 @@ clear ax c
 
 % Get metastability bin sizes
 f = figure; hold on;
-hg{1} = histogram(metastable.dFC{:, label_groups(1)}, 'Normalization','probability');
-hg{2} = histogram(metastable.dFC{:, label_groups(2)}, 'Normalization','probability');
+hg{1} = histogram(metastable.dFC{:, groups(1)}, 'Normalization','probability');
+hg{2} = histogram(metastable.dFC{:, groups(2)}, 'Normalization','probability');
 sz(1) = min(hg{1}.BinWidth, hg{2}.BinWidth);
-hg{1} = histogram(metastable.IC{:, label_groups(1)}, 'Normalization','probability');
-hg{2} = histogram(metastable.IC{:, label_groups(2)}, 'Normalization','probability');
+hg{1} = histogram(metastable.IC{:, groups(1)}, 'Normalization','probability');
+hg{2} = histogram(metastable.IC{:, groups(2)}, 'Normalization','probability');
 sz(2) = min(hg{1}.BinWidth, hg{2}.BinWidth);
 close(f); clear hg f
 
@@ -712,11 +626,11 @@ F(N.fig) = figure; hold on; sgtitle('Metastability'); N.fig = N.fig+1;
 ax(1) = subplot(1,2,1); hold on; title('dFC Metastability');
 ax(2) = subplot(1,2,2); hold on; title('IC Metastability');
 for c = 1:N.conditions
-    histogram(ax(1), metastable.dFC{:,label_groups(c)}, 'BinWidth',sz(1), 'Normalization','probability');
-    histogram(ax(2), metastable.IC{:,label_groups(c)}, 'BinWidth',sz(2), 'Normalization','probability');
+    histogram(ax(1), metastable.dFC{:,groups(c)}, 'BinWidth',sz(1), 'Normalization','probability');
+    histogram(ax(2), metastable.IC{:,groups(c)}, 'BinWidth',sz(2), 'Normalization','probability');
 end
-legend(ax(1), label_groups);
-legend(ax(2), label_groups);
+legend(ax(1), groups);
+legend(ax(2), groups);
 
 
 %% Visualize IC memberships
@@ -743,7 +657,7 @@ if strcmpi(aType.compress, 'none')
 		imagesc(a); colorbar; hold on;
 		xlim([1 size(a,2)]); ylim([1 size(a,1)]);
 		title('Connectivity');
-		yticks(1:N.ROI); yticklabels(label_AAL90); xticks([]);
+		yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
 		pbaspect([1 1 1]);
 
 		% Histogram of component entropies
@@ -776,7 +690,7 @@ if strcmpi(aType.compress, 'none')
 			a = mships; a(~ind(:,4)) = 0; bar(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
 		end
 		title(['z-score threshold: ' num2str(zthresh)]);
-		xticks(1:N.ROI); xticklabels(label_AAL90); xtickangle(-90);
+		xticks(1:N.ROI); xticklabels(labels_ROI); xtickangle(-90);
 		xlabel('z-score');
 	end
 end
