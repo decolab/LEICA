@@ -23,13 +23,13 @@ path{1,1} = strjoin(path{1}(1:end-3),'/');
 % Set data-specific subdirectories
 path{4,1} = fullfile(path{2}, 'UCLA');
 path{5,1} = fullfile(path{4}, 'Data');
-path{6,1} = fullfile(path{5}, 'Results', 'LEICA');
+path{6,1} = fullfile(path{4}, 'Results', 'LEICA');
 
 % Add relevant paths
-fpath{1,1} = fullfile(path{1},'MATLAB','spm12');
-fpath{2,1} = fullfile(path{1},'MATLAB','FastICA');
-fpath{3,1} = fullfile(path{1},'MATLAB','permutationTest');
-fpath{4,1} = fullfile(path{2},'Functions');
+fpath{1,1} = fullfile(path{1}, 'MATLAB','spm12');
+fpath{2,1} = fullfile(path{1}, 'MATLAB','FastICA');
+fpath{3,1} = fullfile(path{1}, 'MATLAB','permutationTest');
+fpath{4,1} = fullfile(path{2}, 'Functions');
 fpath{5,1} = fullfile(path{2}, 'LEICA', 'Functions');
 for k = 1:numel(fpath)-1
 	addpath(fpath{k});
@@ -499,8 +499,8 @@ for c = 1:N.comp
     
     % Compare dFC FCD distributions
     disp('Comparing dFC FCD.');
-    pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(C(c,1)),C(c,1))), [N.subjects(C(c,1))*175^2, 1]);
-    con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(C(c,2)),C(c,2))), [N.subjects(C(c,2))*175^2, 1]);
+    pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(C(c,1)),C(c,1))), [N.subjects(C(c,1))*T.scan^2, 1]);
+    con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(C(c,2)),C(c,2))), [N.subjects(C(c,2))*T.scan^2, 1]);
     [FCD.dFC.h(c,1), FCD.dFC.p(c,1), FCD.dFC.effsize(c,1)] = kstest2(con, pat);
     [FCD.dFC.p(c,2), ~, FCD.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if FCD.dFC.p(c,2) < pval.target
@@ -511,8 +511,8 @@ for c = 1:N.comp
     
     % Compare IC FCD distributions
     disp('Comparing IC FCD.');
-    con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,1)),C(c,1))), [N.subjects(C(c,1))*175^2, 1]);
-    pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,2)),C(c,2))), [N.subjects(C(c,2))*175^2, 1]);
+    con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,1)),C(c,1))), [N.subjects(C(c,1))*T.scan^2, 1]);
+    pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,2)),C(c,2))), [N.subjects(C(c,2))*T.scan^2, 1]);
     [FCD.IC.h(c,1), FCD.IC.p(c,1), FCD.IC.effsize(c,1)] = kstest2(con, pat);
     [FCD.IC.p(c,2), ~, FCD.ID.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if FCD.IC.p(c,2) < pval.target
@@ -699,11 +699,11 @@ clear mships j hg sz f ind a
 
 %% Save results
 
-% % Save figures
-% if exist('F', 'var')
-% 	savefig(F, fullfile(path{6}, fileName), 'compact');
-% 	clear F
-% end
-% 
-% % Save all data
-% save(fullfile(path{6}, fileName));
+% Save figures
+if exist('F', 'var')
+	savefig(F, fullfile(path{6}, fileName), 'compact');
+	clear F
+end
+
+% Save all data
+save(fullfile(path{6}, fileName));
