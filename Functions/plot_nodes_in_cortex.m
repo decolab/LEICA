@@ -33,19 +33,19 @@ z = a*z;
 for n = 1:length(V)
     if V(n)>0
 		if V(n)>thresh && ismember(n,r)
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 V(n) 0],'EdgeColor',sum(cind.node(c(r==n),:),1),'FaceAlpha',0.5);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 0 0],'EdgeColor',cind.node(c(r==n),:),'FaceAlpha',0.5);
 		elseif V(n)>thresh
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 V(n) 0],'EdgeColor','none','FaceAlpha',0.5);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 0 0],'EdgeColor','none','FaceAlpha',0.5);
         else
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 V(n) 0],'EdgeColor','none','FaceAlpha',0.1);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 0 0],'EdgeColor','none','FaceAlpha',0.1);
 		end
     elseif V(n)<0
 		if abs(V(n))>thresh && ismember(n,r)
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 -V(n) 1],'EdgeColor',sum(cind.node(c(r==n),:),1),'FaceAlpha',0.5);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 0 1],'EdgeColor',cind.node(c(r==n),:),'FaceAlpha',0.5);
 		elseif abs(V(n))>thresh
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 -V(n) 1],'EdgeColor','none','FaceAlpha',0.5);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 0 1],'EdgeColor','none','FaceAlpha',0.5);
 		else
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 -V(n) 1],'EdgeColor','none','FaceAlpha',0.1);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 0 1],'EdgeColor','none','FaceAlpha',0.1);
 		end
     elseif V(n)==0
         surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 1 1],'EdgeColor','none','FaceAlpha',0.1);
