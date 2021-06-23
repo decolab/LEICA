@@ -31,7 +31,7 @@ iPH = dFC(TS, 'nROI',N, 'T',T, 'distType',distType);
 
 % Compress dFC
 switch compressType
-	case {'LEICA', 'eigenvector'}
+	case {'LE', 'LEICA', 'eigenvector'}
 		iFC = nan(T, N);
 		for t = 1:T
 			[iFC(t,:), ~] = eigs(squeeze(iPH(:,:,t)),1);
@@ -41,12 +41,14 @@ switch compressType
 		for t = 1:T
 			iFC(t,:) = mean(squeeze(iPH(:,:,t)));
 		end
-	otherwise
+    case 'none'
 		iFC = nan(T, length(find(tril(ones(N),-1))));
-		for t = 1:T
+        for t = 1:T
 			d = squeeze(iPH(:,:,t));
 			iFC(t,:) = d(find(tril(ones(N),-1))');
-		end
+        end
+    otherwise
+        error("Please select one of the supported compression methods.");
 end
 
 % Convert dFC matrix to standard format

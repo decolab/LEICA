@@ -56,10 +56,10 @@ N.fig = 1;
 %% Set analysis methods
 
 % Methods key
-aType.filter = 'wideband';	% determine which type of filter to use; highpass or bandpass
-aType.dist = 'cosine';	% for measuring distance: cosine or exponential
-aType.compress = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
-aType.segment = 'kmeans';		% determine which segmentation to use: ICA, k-means, or binary k-means (only assigns states as ON or OFF)
+aType.filter = 'wideband';  % determine which type of filter to use; highpass or bandpass
+aType.dist = 'cosine';      % for measuring distance: cosine or exponential
+aType.compress = 'LE';      % for compressing matrix: eigenvector, average, or none
+aType.segment = 'kmeans';      % determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
 
 % Set number of neighbors to search for in KNN
 co = HShannon_kNN_k_initialization(1);
@@ -72,12 +72,14 @@ pval.target = 0.05;
 
 % Set base filename
 switch aType.compress
-	case {'LE', 'eigenvector'}
+	case {'LE', 'LEICA', 'eigenvector'}
 		fileName = 'LE';
-	case 'average'
+	case {'average' , 'mean'}
 		fileName = 'M';
-	otherwise
+    case 'none'
 		fileName = 'dFC';
+    otherwise
+        error("Please select one of the supported compression methods");
 end
 switch aType.dist
 	case 'cosine'
@@ -88,7 +90,12 @@ end
 
 % Set iteration number
 fList = dir(fullfile(path{6}, strcat(fileName, '*')));	% Get file list
-nIter = numel(fList) + 1; clear fList;					% Find number of previous iterations
+if numel(fList) == 0
+    nIter = 1;
+else
+    nIter = numel(fList)+1;
+end
+clear fList					% Find number of previous iterations
 
 % Set full filename
 fileName = strcat(fileName, '_', aType.filter, '_k', num2str(co.mult), '_Iteration', num2str(nIter));
@@ -488,13 +495,13 @@ for c = 1:N.comp
         disp(['Running ', ttype{t}, ' tests.']);
 
         % Compare activations
-        sig.BOLD(c,t) = robustTests(cell2mat(BOLD(:,C(c,1))'), cell2mat(BOLD(:,C(c,2))'), N.ROI, 'p',pval.target, 'testtype',ttype{t});				% Compare ROI time series
-        sig.dFC(c,t) = robustTests(dFC.cond{C(c,1)}, dFC.cond{C(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttype{t});					% Compare dFC time series
-        sig.IC(c,t) = robustTests(activities.cond{C(c,1)}, activities.cond{C(c,2)}, N.IC, 'p',pval.target, 'testtype',ttype{t});					% Compare IC time series
+        [sig.BOLD.h(:,c,t), sig.BOLD.p(:,c,t), sig.BOLD.tstat(:,c,t)] = robustTests(cell2mat(BOLD(:,C(c,1))'), cell2mat(BOLD(:,C(c,2))'), N.ROI, 'p',pval.target, 'testtype',ttype{t});				% Compare ROI time series
+        [sig.dFC.h(:,c,t), sig.dFC.p(:,c,t), sig.dFC.tstat(:,c,t)] = robustTests(dFC.cond{C(c,1)}, dFC.cond{C(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttype{t});					% Compare dFC time series
+        [sig.IC.h(:,c,t), sig.IC.p(:,c,t), sig.IC.tstat(:,c,t)] = robustTests(activities.cond{C(c,1)}, activities.cond{C(c,2)}, N.IC, 'p',pval.target, 'testtype',ttype{t});					% Compare IC time series
         
         % Compare complexities
-        sig.fcomp.IC(c,t) = robustTests(squeeze(fcomp.IC(:,:,C(c,1))), squeeze(fcomp.IC(:,:,C(c,2))), N.IC, 'p',pval.target, 'testtype',ttype{t});          % Compare IC functional complexities
-        sig.fcomp.BOLD(c,t) = robustTests(squeeze(fcomp.BOLD(:,:,C(c,1))), squeeze(fcomp.BOLD(:,:,C(c,2))), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD functional complexities
+        [sig.fcomp.BOLD.h(:,c,t), sig.fcomp.BOLD.p(:,c,t), sig.fcomp.BOLD.tstat(:,c,t)] = robustTests(squeeze(fcomp.BOLD(:,:,C(c,1))), squeeze(fcomp.BOLD(:,:,C(c,2))), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD functional complexities
+        [sig.fcomp.IC.h(:,c,t), sig.fcomp.IC.p(:,c,t), sig.fcomp.IC.tstat(:,c,t)] = robustTests(squeeze(fcomp.IC(:,:,C(c,1))), squeeze(fcomp.IC(:,:,C(c,2))), N.IC, 'p',pval.target, 'testtype',ttype{t});          % Compare IC functional complexities
     end
     
     % Compare dFC FCD distributions
@@ -514,7 +521,7 @@ for c = 1:N.comp
     con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,1)),C(c,1))), [N.subjects(C(c,1))*T.scan^2, 1]);
     pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,2)),C(c,2))), [N.subjects(C(c,2))*T.scan^2, 1]);
     [FCD.IC.h(c,1), FCD.IC.p(c,1), FCD.IC.effsize(c,1)] = kstest2(con, pat);
-    [FCD.IC.p(c,2), ~, FCD.ID.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+    [FCD.IC.p(c,2), ~, FCD.IC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if FCD.IC.p(c,2) < pval.target
         FCD.IC.h(c,2) = 1;
     else
@@ -581,7 +588,56 @@ for c = 1:N.comp
         sig.fcomp.meanIC.h(c,2) = 0;
     end
 end
-clear con pat t c
+
+% Run mutiple-comparison correction
+if c > 1
+    for t = 1:numel(ttype)
+        
+        % BOLD activations
+        p_dum = reshape(squeeze(sig.BOLD.p(:,:,t)), [N.comp*N.ROI, 1]);     % reshape p-value array)
+        [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
+        sig.BOLD.FDR(:,:,t) = reshape(f, [N.ROI, N.comp]);
+        sig.BOLD.Sidak(:,:,t) = reshape(S, [N.ROI, N.comp]);
+        
+        % dFC activations
+        p_dum = reshape(squeeze(sig.dFC.p(:,:,t)), [N.comp*N.ROI, 1]);      % reshape p-value array)
+        [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
+        sig.dFC.FDR(:,:,t) = reshape(f, [N.ROI, N.comp]);
+        sig.dFC.Sidak(:,:,t) = reshape(S, [N.ROI, N.comp]);
+        
+        % dFC activations
+        p_dum = reshape(squeeze(sig.IC.p(:,:,t)), [N.comp*N.IC, 1]);	% reshape p-value array)
+        [f, ~, S] = mCompCorr([], p_dum, pval.target);                  % run mutliple comparison tests
+        sig.IC.FDR(:,:,t) = reshape(f, [N.IC, N.comp]);
+        sig.IC.Sidak(:,:,t) = reshape(S, [N.IC, N.comp]);
+        
+        % BOLD functional complexity
+        p_dum = reshape(squeeze(sig.fcomp.BOLD.p(:,:,t)), [N.comp*N.ROI, 1]);	% reshape p-value array)
+        [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
+        sig.fcomp.BOLD.FDR(:,:,t) = reshape(f, [N.ROI, N.comp]);
+        sig.fcomp.BOLD.Sidak(:,:,t) = reshape(S, [N.ROI, N.comp]);
+        
+        % Component functional complexity
+        p_dum = reshape(squeeze(sig.fcomp.IC.p(:,:,t)), [N.comp*N.IC, 1]);	% reshape p-value array)
+        [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
+        sig.fcomp.IC.FDR(:,:,t) = reshape(f, [N.IC, N.comp]);
+        sig.fcomp.IC.Sidak(:,:,t) = reshape(S, [N.IC, N.comp]);
+        
+        % FCD Activations
+        [FCD.IC.FDR, FCD.IC.Bonferroni, FCD.IC.Sidak] = mCompCorr([], FCD.IC.p(:,t), pval.target);
+        [FCD.dFC.FDR, FCD.dFC.Bonferroni, FCD.dFC.Sidak] = mCompCorr([], FCD.dFC.p(:,t), pval.target);
+
+        % Metastability
+        [sig.metastable.BOLD.FDR, sig.metastable.BOLD.Bonferroni, sig.metastable.BOLD.Sidak] = mCompCorr([], sig.metastable.BOLD.p(:,t), pval.target);
+        [sig.metastable.dFC.FDR, sig.metastable.dFC.Bonferroni, sig.metastable.dFC.Sidak] = mCompCorr([], sig.metastable.dFC.p(:,t), pval.target);
+        [sig.metastable.IC.FDR, sig.metastable.IC.Bonferroni, sig.metastable.IC.Sidak] = mCompCorr([], sig.metastable.IC.p(:,t), pval.target);
+
+        % Mean Complexities
+        [sig.fcomp.meansubj.FDR, sig.fcomp.meansubj.Bonferroni, sig.fcomp.meansubj.Sidak] = mCompCorr([], sig.meansubj.meanIC.p(:,t), pval.target);
+        [sig.fcomp.meanIC.FDR, sig.fcomp.meanIC.Bonferroni, sig.fcomp.meanIC.Sidak] = mCompCorr([], sig.fcomp.meanIC.p(:,t), pval.target);
+    end
+end
+clear con pat t c pdum f S
 
 
 %% Visualize FCD Distributions
