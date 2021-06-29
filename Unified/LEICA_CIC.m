@@ -37,17 +37,11 @@ end
 addpath(genpath(fpath{numel(fpath)}));
 clear fpath k
 
-% Set figure counter
-N.fig = 1;
-
 
 %% Load data
 
 % Load formatted data
 load(fullfile(path{5}, 'formattedUCLA.mat'));
-
-% Indices for vectorizing lower triangle
-Isubdiag = find(triu(ones(N.ROI), 1));
 
 % Set figure counter
 N.fig = 1;
@@ -66,6 +60,18 @@ co = HShannon_kNN_k_initialization(1);
 
 % Set hypothesis test parameters
 pval.target = 0.05;
+
+% Determine pairwise comparisons to make
+C = ["CONTROL", "BIPOLAR"];
+if strcmpi(C, "all")
+    C = nchoosek(1:N.conditions, 2);    % all comparisons
+else
+    C = find(matches(groups, C))';
+end
+N.comp = size(C,1);
+
+% Define test types
+ttype = {'kstest2', 'permutation'};
 
 
 %% Set filename to save
@@ -86,6 +92,9 @@ switch aType.dist
 		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_COS');
 	case 'exponential'
 		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_EXP');
+end
+if size(C,1) == 1
+    fileName = strcat(fileName, '_', groups(C(1)), 'v', groups(C(2)));
 end
 
 % Set iteration number
@@ -148,8 +157,12 @@ for c = 1:N.conditions
 	end
 	dFC.cond{c} = cell2mat(dFC.subj(1:N.subjects(c),c)');
 end
-dFC.concat = cell2mat(dFC.cond);
-clear t s c afilt bfilt Isubdiag sc90
+if size(C,1) == 1
+    dFC.concat = dFC.cond{C(1)};
+else
+    dFC.concat = cell2mat(dFC.cond);
+end
+clear t s c afilt bfilt sc90
 
 % Plot BOLD signals
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
@@ -189,7 +202,8 @@ explainedVar = sum(explained(N.IC+1:end));
 switch aType.segment
 	case 'ICA'
 		disp('Processing ICs from dFC data');
-		[activities.concat, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
+		[~, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
+        activities.concat = W*dFC.concat;
 	case 'binary'
 		disp('Processing clusters from dFC data');
 		[idx, memberships] = kmeans(dFC.concat', N.IC);
@@ -206,6 +220,7 @@ switch aType.segment
 		activities.concat = 1./D;
 		activities.concat = activities.concat./max(activities.concat, [], 'all');
 end
+dFC.concat = cell2mat(dFC.cond);
 meanActivity.concat = mean(activities.concat, 2);
 
 % Separate assembly activations by condition & subject
@@ -228,9 +243,9 @@ clear i s c
 % Sort memberships by activation level and normalize weights
 [meanActivity.concat, i] = sort(meanActivity.concat, 1, 'descend');
 memberships = memberships(:,i);
-for k = 1:N.IC
-	memberships(:,k) = memberships(:,k)./norm(memberships(:,k));
-end
+% for k = 1:N.IC
+% 	memberships(:,k) = memberships(:,k)./norm(memberships(:,k));
+% end
 clear k i
 
 % Compute component matrices
@@ -479,13 +494,6 @@ fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', groups);
 
 
 %% Compare IC metrics between conditions, vs. permuted null distribution
-
-% Determine all possible pairwise comparisons
-C = nchoosek(1:N.conditions, 2);
-N.comp = size(C,1);
-
-% Define test types
-ttype = {'kstest2', 'permutation'};
 
 % Loop through all pairwise comparisons
 for c = 1:N.comp
@@ -755,11 +763,11 @@ clear mships j hg sz f ind a
 
 %% Save results
 
-% Save figures
-if exist('F', 'var')
-	savefig(F, fullfile(path{6}, fileName), 'compact');
-	clear F
-end
-
-% Save all data
-save(fullfile(path{6}, fileName));
+% % Save figures
+% if exist('F', 'var')
+% 	savefig(F, fullfile(path{6}, fileName), 'compact');
+% 	clear F
+% end
+% 
+% % Save all data
+% save(fullfile(path{6}, fileName));
