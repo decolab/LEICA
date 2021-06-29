@@ -20,7 +20,6 @@ isonormals(sregion,psregion);
 set(psregion,'FaceAlpha', cortex.transparency);			%transparency
 
 % PLOT NODES
-V = V/max(abs(V));
 [x,y,z] = sphere;
 x = a*x;
 y = a*y;
@@ -29,31 +28,35 @@ z = a*z;
 % Find which nodes have significant changes in in-strength and out-strength
 [r, c] = find(str{:,:});
 
+% Locate significant connections
+V = V/max(abs(V));
+n_strong = find(V > thresh);
+n_weak = find(V < -thresh);
+
 % Plot nodes
 for n = 1:length(V)
     if V(n)>0
 		if V(n)>thresh && ismember(n,r)
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 0 0],'EdgeColor',cind.node(c(r==n),:),'FaceAlpha',0.5);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',cind.node(1,:), 'EdgeColor',sum(cind.node(c(r==n),:),1),'FaceAlpha',0.5);
 		elseif V(n)>thresh
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 0 0],'EdgeColor','none','FaceAlpha',0.5);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',cind.node(1,:), 'EdgeColor','none','FaceAlpha',0.5);
         else
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 0 0],'EdgeColor','none','FaceAlpha',0.1);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',cind.node(1,:), 'EdgeColor','none','FaceAlpha',0.1);
 		end
     elseif V(n)<0
 		if abs(V(n))>thresh && ismember(n,r)
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 0 1],'EdgeColor',cind.node(c(r==n),:),'FaceAlpha',0.5);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',cind.node(2,:), 'EdgeColor',sum(cind.node(c(r==n),:),1),'FaceAlpha',0.5);
 		elseif abs(V(n))>thresh
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 0 1],'EdgeColor','none','FaceAlpha',0.5);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',cind.node(2,:), 'EdgeColor','none','FaceAlpha',0.5);
 		else
-			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 0 1],'EdgeColor','none','FaceAlpha',0.1);
+			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',cind.node(2,:), 'EdgeColor','none','FaceAlpha',0.1);
 		end
     elseif V(n)==0
-        surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 1 1],'EdgeColor','none','FaceAlpha',0.1);
+        surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 0 1],'EdgeColor','none','FaceAlpha',0.1);
     end
 end
 
 % Plot significant connections
-n_strong = find(V > thresh); n_weak = find(V < -thresh);
 if ~isempty(map) && iscell(map)
 	[thr,con] = size(map);
 	for r = 1:thr
@@ -70,7 +73,8 @@ if ~isempty(map) && iscell(map)
 					p2 = [coord(l(s,1),2)+ori(1) coord(l(s,1),1)+ori(2) coord(l(s,1),3)+ori(3)];
 					p1 = [coord(l(s,2),2)+ori(1) coord(l(s,2),1)+ori(2) coord(l(s,2),3)+ori(3)];
 
-					h(f,c) = mArrow3(p1,p2, 'color',cind.node(c,:)+[0 1-a(f) 0], 'stemWidth',0.15, 'facealpha',0.7); hold on;   % adjusts arrow color based on total strength
+					h(f,c) = mArrow3(p1,p2, 'color',cind.conn(c,:), 'stemWidth',0.15, 'tipWidth',0.8, 'facealpha',0.8); hold on;   % sets arrow color to contrast
+                    % h(f,c) = mArrow3(p1,p2, 'color',cind.node(c,:)+[0 1-a(f) 0], 'stemWidth',0.15, 'facealpha',0.7); hold on;   % adjusts arrow color based on total strength
                     % mArrow3(p1,p2, 'color',cind{c}, 'stemWidth',0.15, 'facealpha', a(f));
 				end
 				clear l
@@ -89,7 +93,7 @@ elseif ~isempty(map)
 		p2 = [coord(l(s,1),2)+ori(1) coord(l(s,1),1)+ori(2) coord(l(s,1),3)+ori(3)];
 		p1 = [coord(l(s,2),2)+ori(1) coord(l(s,2),1)+ori(2) coord(l(s,2),3)+ori(3)];
         
-		mArrow3(p1,p2, 'color',cind.conn, 'stemWidth',0.15, 'facealpha',0.7); hold on;
+		mArrow3(p1,p2, 'color',cind.conn, 'stemWidth',0.15, 'tipWidth',0.8, 'facealpha',0.7); hold on;
 	end
 elseif numel(n_strong)>1 && numel(n_weak)>1
     for a = 1:numel(n_strong)
@@ -98,7 +102,7 @@ elseif numel(n_strong)>1 && numel(n_weak)>1
             p = n_strong(b);
             c1 = [coord(n,2)+ori(1) coord(n,1)+ori(2) coord(n,3)+ori(3)];
             c2 = [coord(p,2)+ori(1) coord(p,1)+ori(2) coord(p,3)+ori(3)];
-            plot3([c1(1) c2(1)],[c1(2) c2(2)],[c1(3) c2(3)], 'Color','r', 'LineWidth',0.75);
+            plot3([c1(1) c2(1)],[c1(2) c2(2)],[c1(3) c2(3)], 'Color',cind.conn(1,:), 'LineWidth',0.75);
             %cmap(IDX(t),:));
         end
     end
@@ -109,7 +113,7 @@ elseif numel(n_strong)>1 && numel(n_weak)>1
             p = n_weak(b);
             c1 = [coord(n,2)+ori(1) coord(n,1)+ori(2) coord(n,3)+ori(3)];
             c2 = [coord(p,2)+ori(1) coord(p,1)+ori(2) coord(p,3)+ori(3)];
-            plot3([c1(1) c2(1)],[c1(2) c2(2)],[c1(3) c2(3)], 'Color','b', 'LineWidth',0.75);
+            plot3([c1(1) c2(1)],[c1(2) c2(2)],[c1(3) c2(3)], 'Color',cind.conn(2,:), 'LineWidth',0.75);
             %cmap(IDX(t),:));
         end
     end

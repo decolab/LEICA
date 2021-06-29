@@ -59,7 +59,7 @@ N.fig = 1;
 aType.filter = 'wideband';  % determine which type of filter to use; highpass or bandpass
 aType.dist = 'cosine';      % for measuring distance: cosine or exponential
 aType.compress = 'LE';      % for compressing matrix: eigenvector, average, or none
-aType.segment = 'kmeans';      % determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
+aType.segment = 'ICA';	% determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
 
 % Set number of neighbors to search for in KNN
 co = HShannon_kNN_k_initialization(1);
@@ -633,7 +633,7 @@ if c > 1
         [sig.metastable.IC.FDR, sig.metastable.IC.Bonferroni, sig.metastable.IC.Sidak] = mCompCorr([], sig.metastable.IC.p(:,t), pval.target);
 
         % Mean Complexities
-        [sig.fcomp.meansubj.FDR, sig.fcomp.meansubj.Bonferroni, sig.fcomp.meansubj.Sidak] = mCompCorr([], sig.meansubj.meanIC.p(:,t), pval.target);
+        [sig.fcomp.meansubj.FDR, sig.fcomp.meansubj.Bonferroni, sig.fcomp.meansubj.Sidak] = mCompCorr([], sig.fcomp.meansubj.p(:,t), pval.target);
         [sig.fcomp.meanIC.FDR, sig.fcomp.meanIC.Bonferroni, sig.fcomp.meanIC.Sidak] = mCompCorr([], sig.fcomp.meanIC.p(:,t), pval.target);
     end
 end
