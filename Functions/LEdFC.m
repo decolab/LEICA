@@ -36,7 +36,7 @@ switch compressType
 		for t = 1:T
 			[iFC(t,:), ~] = eigs(squeeze(iPH(:,:,t)),1);
 		end
-	case 'average'
+	case {'average', 'mean'}
 		iFC = nan(T, N);
 		for t = 1:T
 			iFC(t,:) = mean(squeeze(iPH(:,:,t)));

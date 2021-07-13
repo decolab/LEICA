@@ -1,11 +1,30 @@
 function plot_nodes_in_cortex (cortex, V, coord, ori, a, thresh, map, cind, strcont, str, redux)
-% 
+%   PLOT_NODES_IN_CORTEX represents the network of interest in cortical
+% space.
+% INPUTS
+%   cortex:	structure which defines cortical space
+%   V:      node weights which define network(s) of interest.  May be
+%           binary or weighted.
+%   coord:  coordinates for nodes in brain space
+%   ori:    origin of coordinate space
+%   a:      scaling parameter: controls size of node markers in cortex
+%   thresh: threshold for highlighting nodes of interest.  May be left
+%           empty if no node(s) should be highlighted.  Absolute value:
+%           applies to both positive and negative weights.  Any scaling
+%           should be done prior to input into function.
+%   map:    edges to plot between nodes.  May be left empty if no edges of
+%           interest exist.
+%   cind:	structure which defines color index.  cind.node denotes node
+%           color key; cind.conn denotes edge color key.
+%   strcont: strings for figure legend
+%   str:    array of nodes to highlight (denotes strength changes).  May be
+%           left empty.
+%   redux:  proportion of surface faces to keep (<1)
+% OUTPUTS: plot of network of interest in cortical space.
 
 % Set defaults
 if isempty(thresh)
 	thresh = 0;	% 0.2;
-else
-	thresh = thresh/max(abs(V));
 end
 if isempty(str)
 	str = cell(1);
