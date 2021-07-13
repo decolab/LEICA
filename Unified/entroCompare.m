@@ -503,8 +503,8 @@ for c = 1:N{1,1}.comp
 
                                     % Histogram of component entropies
                                     kax = subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
-                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'BinWidth',sz, 'Normalization','Probability');
-                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'BinWidth',sz, 'Normalization','Probability');
+                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'BinWidth',sz, 'Normalization','probability');
+                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'BinWidth',sz, 'Normalization','probability');
                                     legend(labels(C{e}(c,:)));
                                     title("Entropy", 'FontSize',16);
                                     ylabel('Counts'); xlabel('Mean Entropy');
@@ -558,8 +558,8 @@ for c = 1:N{1,1}.comp
 
                                 % Histogram of component entropies
                                 kax = subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
-                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'BinWidth',sz, 'Normalization','Probability');
-                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'BinWidth',sz, 'Normalization','Probability');
+                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'BinWidth',sz, 'Normalization','probability');
+                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'BinWidth',sz, 'Normalization','probability');
                                 legend(labels(C{e}(c,:)));
                                 title("Entropy", 'FontSize',16);
                                 ylabel('Counts'); xlabel('Mean Entropy');
@@ -593,7 +593,7 @@ for c = 1:N{1,1}.comp
                             % Histogram of component entropies
                             K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
                             for p = 1:size(C{e},2)
-                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,p)), 'BinWidth',sz, 'Normalization','Probability');
+                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,p)), 'BinWidth',sz, 'Normalization','probability');
                             end
                             legend(labels(C{e}(c,:)));
                             title(strjoin({'Entropy of', char(labels_ROI(h{e,s,t,c}(j))), 'in', spaces{s}, 'Space'}));
