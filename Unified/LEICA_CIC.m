@@ -4,6 +4,11 @@
 % phase-based synchrony measures.  It is possible to compute synchrony
 % measures based on the z-score and the BOLD signal, but at the moment this
 % will only add complexity.
+%   We implement three methods for assigning time points to components.  The
+% first is ICA, which assigns an activation to each time point.  The second
+% is binary k-means, in which each time point is assigned a single
+% time point.  The final option is probabilistic k-means in which each
+% component has a certain probability of activation for each time point.
 
 
 %%	SET UP FILE SYSTEM
@@ -53,7 +58,7 @@ N.fig = 1;
 aType.filter = 'wideband';  % determine which type of filter to use; highpass or bandpass
 aType.dist = 'cosine';      % for measuring distance: cosine or exponential
 aType.compress = 'LE';      % for compressing matrix: eigenvector, average, or none
-aType.segment = 'ICA';	% determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
+aType.segment = 'binary';	% determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
 
 % Set number of neighbors to search for in KNN
 co = HShannon_kNN_k_initialization(1);
@@ -61,8 +66,11 @@ co = HShannon_kNN_k_initialization(1);
 % Set hypothesis test parameters
 pval.target = 0.05;
 
+% Set group on which to define componnets
+compGroup = "CONTROL";
+
 % Determine pairwise comparisons to make
-C = ["CONTROL", "BIPOLAR"];
+C = "all";	% ["CONTROL", "BIPOLAR"];
 if strcmpi(C, "all")
     C = nchoosek(1:N.conditions, 2);    % all comparisons
 else
@@ -157,10 +165,10 @@ for c = 1:N.conditions
 	end
 	dFC.cond{c} = cell2mat(dFC.subj(1:N.subjects(c),c)');
 end
-if size(C,1) == 1
-    dFC.concat = dFC.cond{C(1)};
-else
+if strcmpi(compGroup, "ALL")
     dFC.concat = cell2mat(dFC.cond);
+else
+    dFC.concat = cell2mat(dFC.cond(find(matches(groups, compGroup))'));
 end
 clear t s c afilt bfilt sc90
 
@@ -168,13 +176,18 @@ clear t s c afilt bfilt sc90
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2,1); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Patient BOLD');
 subplot(2,2,2); imagesc(cell2mat(BOLD(:,2)')); colorbar; title('Control BOLD');
-subplot(2,2,[3 4]); hold on; histogram(cell2mat(BOLD(:,1)')); histogram(cell2mat(BOLD(:,2)')); legend('Patient', 'Control');
+subplot(2,2,[3 4]); hold on; legend('Patient', 'Control');
+histogram(cell2mat(BOLD(:,1)'), 'Normalization','probability');
+histogram(cell2mat(BOLD(:,2)'), 'Normalization','probability');
 
 % Plot dFC signals
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2,1); imagesc(dFC.cond{1}); colorbar; title('Patient LEdFC');
 subplot(2,2,2); imagesc(dFC.cond{2}); colorbar; title('Control LEdFC');
-subplot(2,2,[3 4]); hold on; histogram(dFC.cond{1}); histogram(dFC.cond{2}); legend('Patient', 'Control');
+subplot(2,2,[3 4]); hold on;
+histogram(dFC.cond{1}, 'Normalization','probability');
+histogram(dFC.cond{2}, 'Normalization','probability');
+legend('Patient', 'Control');
 
 % Compute FCD, power spectra of dFC
 for c = 1:N.conditions
@@ -203,24 +216,49 @@ switch aType.segment
 	case 'ICA'
 		disp('Processing ICs from dFC data');
 		[~, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
+        if ~strcmpi(compGroup,'ALL')
+            dFC.concat = cell2mat(dFC.cond);
+        end
         activities.concat = W*dFC.concat;
 	case 'binary'
 		disp('Processing clusters from dFC data');
 		[idx, memberships] = kmeans(dFC.concat', N.IC);
+        if ~strcmpi(compGroup,'ALL')
+            dFC.concat = cell2mat(dFC.cond)';
+            X = vertcat(memberships, dFC.concat);
+            D = squareform(pdist(X));
+            D = D(1:N.IC, N.IC:end);
+            [~,idx] = min(D);
+            activities.concat = zeros(N.IC, size(dFC.concat,2));
+            for i = 1:N.IC
+                activities.concat(i, :) = (idx == i)';
+            end
+            clear D X idx
+        else
+            activities.concat = zeros(N.IC, length(idx));
+            for i = 1:N.IC
+                activities.concat(i, :) = (idx == i)';
+            end
+            clear i idx
+        end
         memberships = memberships';
-		activities.concat = zeros(N.IC, length(idx));
-		for i = 1:N.IC
-			activities.concat(i, :) = (idx == i)';
-		end
-		clear i
 	case 'kmeans'
 		disp('Processing clusters from dFC data');
-		[idx, memberships, ~, D] = kmeans(dFC.concat', N.IC);
+		[~, memberships, ~, D] = kmeans(dFC.concat', N.IC);
         memberships = memberships'; D = D';
-		activities.concat = 1./D;
-		activities.concat = activities.concat./max(activities.concat, [], 'all');
+        if ~strcmpi(compGroup,'ALL')
+            dFC.concat = cell2mat(dFC.cond)';
+            X = vertcat(memberships, dFC.concat);
+            D = squareform(pdist(X));
+            D = D(1:N.IC, N.IC:end);
+            activities.concat = 1./D;
+            activities.concat = activities.concat./sum(activities.concat, 1);
+        else
+            activities.concat = 1./D;
+            activities.concat = activities.concat./sum(activities.concat, 1);   % scale as probabilities
+        end
+        clear D idx
 end
-dFC.concat = cell2mat(dFC.cond);
 meanActivity.concat = mean(activities.concat, 2);
 
 % Separate assembly activations by condition & subject
@@ -261,7 +299,10 @@ clear i
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,3, [1 2]); imagesc(cell2mat(activities.subj(1:N.subjects(1),1)')); colorbar; title('Patient LEICA Activations');
 subplot(2,3, [4 5]); imagesc(cell2mat(activities.subj(1:N.subjects(2),2)')); colorbar; title('Control LEICA Activations');
-subplot(2,3, [3 6]); hold on; histogram(cell2mat(activities.subj(1:N.subjects(1),1))); histogram(cell2mat(activities.subj(1:N.subjects(2),2))); legend({'Patient', 'Control'});
+subplot(2,3, [3 6]); hold on;
+histogram(cell2mat(activities.subj(1:N.subjects(1),1)), 'Normalization','probability');
+histogram(cell2mat(activities.subj(1:N.subjects(2),2)), 'Normalization','probability');
+legend({'Patient', 'Control'});
 
 % Compute FCD of subject-level ICs
 for c = 1:N.conditions
@@ -726,8 +767,8 @@ if strcmpi(aType.compress, 'none')
 
 		% Histogram of component entropies
 		kax = subplot(2, 4, [1 2]); hold on;
-		histogram(entro.IC(j,:,1), 'BinWidth',sz, 'Normalization','Probability');
-		histogram(entro.IC(j,:,2), 'BinWidth',sz, 'Normalization','Probability');
+		histogram(entro.IC(j,:,1), 'BinWidth',sz, 'Normalization','probability');
+		histogram(entro.IC(j,:,2), 'BinWidth',sz, 'Normalization','probability');
 		legend(labels.Properties.VariableNames);
 		title('Entropy');
 		ylabel('Counts'); xlabel('Mean Entropy');
