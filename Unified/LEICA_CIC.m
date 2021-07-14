@@ -58,7 +58,7 @@ N.fig = 1;
 aType.filter = 'wideband';  % determine which type of filter to use; highpass or bandpass
 aType.dist = 'cosine';      % for measuring distance: cosine or exponential
 aType.compress = 'LE';      % for compressing matrix: eigenvector, average, or none
-aType.segment = 'binary';	% determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
+aType.segment = 'ICA';      % determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
 
 % Set number of neighbors to search for in KNN
 co = HShannon_kNN_k_initialization(1);
@@ -67,10 +67,10 @@ co = HShannon_kNN_k_initialization(1);
 pval.target = 0.05;
 
 % Set group on which to define componnets
-compGroup = "CONTROL";
+compGroup = "Control";
 
 % Determine pairwise comparisons to make
-C = "all";	% ["CONTROL", "BIPOLAR"];
+C = ["CONTROL", "ADHD"];    % "all";
 if strcmpi(C, "all")
     C = nchoosek(1:N.conditions, 2);    % all comparisons
 else
@@ -82,7 +82,7 @@ N.comp = size(C,1);
 ttype = {'kstest2', 'permutation'};
 
 
-%% Set filename to save
+%% Define filename based on parameters
 
 % Set base filename
 switch aType.compress
@@ -95,14 +95,20 @@ switch aType.compress
     otherwise
         error("Please select one of the supported compression methods");
 end
+if strcmpi(compGroup, "All")
+    fileName = fullfile('CommonIC', strcat(fileName, '_', aType.segment, '_CIC'));
+else
+    fileName = fullfile('GroupIC', strcat(fileName, '_', aType.segment, '_', compGroup, 'IC'));
+end
 switch aType.dist
 	case 'cosine'
-		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_COS');
+		fileName = strcat(fileName, '_COS');
 	case 'exponential'
-		fileName = strcat(fileName, '_', aType.segment, '_AAL90_CIC_EXP');
+		fileName = strcat(fileName, '_EXP');
 end
-if size(C,1) == 1
-    fileName = strcat(fileName, '_', groups(C(1)), 'v', groups(C(2)));
+if numel(C) == 2
+    fileName = strsplit(fileName, '/');
+    fileName = fullfile(fileName{1}, 'Pairwise', strcat(strjoin(fileName(2:end),'/'), '_', groups(C(1)), 'v', groups(C(2))));
 end
 
 % Set iteration number
@@ -804,11 +810,11 @@ clear mships j hg sz f ind a
 
 %% Save results
 
-% % Save figures
-% if exist('F', 'var')
-% 	savefig(F, fullfile(path{6}, fileName), 'compact');
-% 	clear F
-% end
-% 
-% % Save all data
-% save(fullfile(path{6}, fileName));
+% Save figures
+if exist('F', 'var')
+	savefig(F, fullfile(path{6}, fileName), 'compact');
+	clear F
+end
+
+% Save all data
+save(fullfile(path{6}, fileName));
