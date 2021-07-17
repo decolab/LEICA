@@ -222,7 +222,7 @@ for d = 1:numel(dType)			% dimension average to display
 			row = nc*(t-1);
 			subplot(size(entro,1), nc, col+row); hold on;
             for c = 1:N{t,s}.conditions
-                h{c} = histogram(mEntro{t,s,d}{:,labels{c}}, 'Normalization','pdf', 'FaceAlpha',0.2, 'FaceColor',[1 0 0]);
+                h{c} = histogram(mEntro{t,s,d}{:,labels{c}}, 'Normalization','pdf', 'FaceAlpha',0.4);
             end
 			
 			% Plot means, distances for significant differences
