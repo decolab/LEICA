@@ -217,22 +217,12 @@ for d = 1:numel(dType)			% dimension average to display
 		col = col+1;
 		for t = 1:numel(titles)
 			
-			% Get bin sizes
-            binwidth = nan(N{t,s}.conditions,1);
-			f = figure; hold on;
-            for c = 1:N{t,s}.conditions
-                hg = histogram(mEntro{t,s,d}{:,labels{c}}, 'Normalization','probability');
-                binwidth(c) = hg.BinWidth;
-            end
-			sz = min(binwidth);
-			close(f); clear f hg c binwidth
-			
 			% Plot mean entropy histograms
 			nc = numel(spaces)*(ndims(entro{t,s})-1);
 			row = nc*(t-1);
 			subplot(size(entro,1), nc, col+row); hold on;
             for c = 1:N{t,s}.conditions
-                h{c} = histogram(mEntro{t,s,d}{:,labels{c}}, 'Normalization','probability', 'FaceAlpha',0.2, 'FaceColor',[1 0 0], 'BinWidth',sz);
+                h{c} = histogram(mEntro{t,s,d}{:,labels{c}}, 'Normalization','pdf', 'FaceAlpha',0.2, 'FaceColor',[1 0 0]);
             end
 			
 			% Plot means, distances for significant differences
@@ -267,7 +257,7 @@ for d = 1:numel(dType)			% dimension average to display
 		end
 	end
 end
-clear d s t nc col row mc mp i h hg sz
+clear d s t nc col row mc mp i h hg
 
 
 %% Overall Entropy
@@ -298,21 +288,11 @@ for s = 1:numel(spaces)
             [FDR(:,1), Bonferroni(:,1), Sidak(:,1)] = mCompCorr([], a(:,1), pTarget);
             [FDR(:,2), Bonferroni(:,2), Sidak(:,2)] = mCompCorr([], a(:,2), pTarget);
         end
-        
-		% Get bin sizes
-		f = figure; hold on;
-        binWidth = nan(N{t,s}.conditions, 1);
-        for c = 1:N{t,s}.conditions
-            hg = histogram(d(:,c));
-            binWidth(c) = hg.BinWidth;
-        end
-		sz = min(binWidth);
-		close(f); clear hg binWidth f
 		
 		% Plot histograms
 		subplot(numel(spaces),numel(titles),n); hold on;
         for c = 1:N{t,s}.conditions
-            h{c} = histogram(entro{t,s}(:,:,c), 'Normalization','probability', 'BinWidth',sz);
+            h{c} = histogram(entro{t,s}(:,:,c), 'Normalization','pdf');
         end
         legend(labels, 'location','northwest');
         
@@ -347,7 +327,7 @@ for s = 1:numel(spaces)
 		clear d
 	end
 end
-clear s t h p a mc mp i n sz hg
+clear s t h p a mc mp i n hg
 
 
 %% Compare component-level entropy between conditions
@@ -492,13 +472,6 @@ for c = 1:N{1,1}.comp
                 if ~isempty(h{e,s,t,c})
                     for j = 1:numel(h{e,s,t,c})
 
-                        % Get bin sizes
-                        f = figure; hold on;
-                        hg{1} = histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'Normalization','probability');
-                        hg{2} = histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'Normalization','probability');
-                        sz = min(hg{1}.BinWidth, hg{2}.BinWidth);
-                        close(f);
-
                         % Plot results
                         if strncmpi(spaces{s}, 'IC', 2)
 
@@ -524,8 +497,8 @@ for c = 1:N{1,1}.comp
 
                                     % Histogram of component entropies
                                     kax = subplot(2, 5, [4 5]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
-                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'BinWidth',sz, 'Normalization','pdf');
-                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'BinWidth',sz, 'Normalization','pdf');
+                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'Normalization','pdf');
+                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'Normalization','pdf');
                                     legend(labels(C{e}(c,:)));
                                     title("Entropy", 'FontSize',16);
                                     ylabel('Probability'); xlabel('Mean Entropy');
@@ -579,8 +552,8 @@ for c = 1:N{1,1}.comp
 
                                 % Histogram of component entropies
                                 kax = subplot(2, 5, [4 5]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
-                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'BinWidth',sz, 'Normalization','probability');
-                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'BinWidth',sz, 'Normalization','probability');
+                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'Normalization','pdf');
+                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'Normalization','pdf');
                                 legend(labels(C{e}(c,:)));
                                 title("Entropy", 'FontSize',16);
                                 ylabel('Probability'); xlabel('Mean Entropy');
@@ -614,7 +587,7 @@ for c = 1:N{1,1}.comp
                             % Histogram of component entropies
                             K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
                             for q = 1:size(C{e},2)
-                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,q)), 'BinWidth',sz, 'Normalization','pdf');
+                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,q)), 'Normalization','pdf');
                             end
                             legend(labels(C{e}(c,:)));
                             title(strjoin({'Entropy of', char(labels_ROI(h{e,s,t,c}(j))), 'in', spaces{s}, 'Space'}));
@@ -629,7 +602,7 @@ for c = 1:N{1,1}.comp
         end
 	end
 end
-clear e s t q B n ax n k j a sz hg f mships m ind
+clear e s t q B n ax n k j a  hg f mships m ind
 
 % Add kFigs to F
 for k = 1:kFig-1
