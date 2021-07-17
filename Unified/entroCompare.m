@@ -424,32 +424,43 @@ for c = 1:N{1,1}.comp
     F(nFig) = figure('Position', [0 0 1280 1024]); nFig = nFig + 1; n(1) = 1;
 	for e = 1:numel(titles)
         for s = 1:numel(spaces)
+            
+            % Set index for all components found across all tests
+            k = [];
+            
+            % Plot significance test results
             for t = 1:numel(ttype)
-                % Plot FDR significance level
-                figure(F(nFig-4));
-                sgtitle([labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}]);	% sgtitle('FDR Significance Threshold');
-                ax(4) = subplot(numel(titles), numel(ttype)+numel(spaces), n(4)); 
-                n(4) = n(4)+1;
-                imagesc(ax(4), squeeze(FDR{e,s}(:,t,c,:)), [0 1]); colormap gray; colorbar;
-                xticks(ax(4), 1:numel(prange));
-                xticklabels(ax(4), strsplit(num2str(prange))); hold on;
-                xlabel('FDR Significant'); ylabel('Component');
-                title([titles{e}, ': ', ttype{t}, ', ', spaces{s}, ' space']);
+                
+                % Set index for all components found across all tests
+                k = union(k, h{e, s, t, c});
+                
+                if N{e,s}.comp > 1
+                    % Plot FDR significance level
+                    figure(F(nFig-2));
+                    sgtitle([labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}]);	% sgtitle('FDR Significance Threshold');
+                    ax(4) = subplot(numel(titles), numel(ttype)+numel(spaces), n(4)); 
+                    n(4) = n(4)+1;
+                    imagesc(ax(4), squeeze(FDR{e,s}(:,t,c,:)), [0 1]); colormap gray; colorbar;
+                    xticks(ax(4), 1:numel(prange));
+                    xticklabels(ax(4), strsplit(num2str(prange))); hold on;
+                    xlabel('FDR Significant'); ylabel('Component');
+                    title([titles{e}, ': ', ttype{t}, ', ', spaces{s}, ' space']);
 
-                % Plot Sidak significance level
-                figure(F(nFig-3));
-                sgtitle([labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}]);	% sgtitle('Sidak Significance Threshold');
-                ax(3) = subplot(numel(titles), numel(ttype)+numel(spaces), n(3));
-                n(3) = n(3)+1;
-                imagesc(ax(3), squeeze(Sidak{e,s}(:,t,c,:)), [0 1]);
-                colormap gray; colorbar;
-                xticks(ax(3), 1:numel(prange));
-                xticklabels(ax(3), strsplit(num2str(prange))); hold on;
-                xlabel('Sidak Significant'); ylabel('Component');
-                title([titles{e}, ': ', ttype{t}, ', ', spaces{s}, ' space']);    % , labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}]);
+                    % Plot Sidak significance level
+                    figure(F(nFig-1));
+                    sgtitle([labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}]);	% sgtitle('Sidak Significance Threshold');
+                    ax(3) = subplot(numel(titles), numel(ttype)+numel(spaces), n(3));
+                    n(3) = n(3)+1;
+                    imagesc(ax(3), squeeze(Sidak{e,s}(:,t,c,:)), [0 1]);
+                    colormap gray; colorbar;
+                    xticks(ax(3), 1:numel(prange));
+                    xticklabels(ax(3), strsplit(num2str(prange))); hold on;
+                    xlabel('Sidak Significant'); ylabel('Component');
+                    title([titles{e}, ': ', ttype{t}, ', ', spaces{s}, ' space']);    % , labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}]);
+                end
 
                 % Display test p-values
-                figure(F(nFig-2));
+                figure(F(nFig-4));
                 sgtitle([labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}]);	% sgtitle('p-values');
                 ax(2) = subplot(numel(titles), numel(ttype)+numel(spaces), n(2)); 
                 n(2) = n(2)+1;
@@ -459,7 +470,7 @@ for c = 1:N{1,1}.comp
                 ylabel('Component'); xlabel('p-value');
 
                 % Display test effect sizes
-                figure(F(nFig-1));
+                figure(F(nFig-3));
                 sgtitle([labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}]);	% sgtitle('Effect Sizes');
                 ax(1) = subplot(numel(titles), numel(ttype)+numel(spaces), n(1));
                 n(1) = n(1)+1;
@@ -467,84 +478,30 @@ for c = 1:N{1,1}.comp
                 plot(sign(tstat{e,s}(h{e,s,t,c},t,c)).*max(abs(tstat{e,s}(:,t,c))).*ones(numel(h{e,s,t,c}),1), h{e,s,t,c}, '*r');
                 title([titles{e}, ': ', ttype{t}, ', ', spaces{s}, ' space']);    %, labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}]);
                 ylabel('Component'); xlabel('Effect Size');
-                
-                % Plot entropy distributions for signifcant separations
-                if ~isempty(h{e,s,t,c})
-                    for j = 1:numel(h{e,s,t,c})
+            end
+            
+            % Plot entropy distributions for signifcant separations
+            if ~isempty(k)
+                for j = 1:numel(k)
 
-                        % Plot results
-                        if strncmpi(spaces{s}, 'IC', 2)
+                    % Plot results
+                    if strncmpi(spaces{s}, 'IC', 2)
 
-                            % Scale memberships (optional)
-                            if zscale == true || sum(zthresh ~= 0, 'all') > 0
-                                mships = zscore(memberships{e});
-                            else
-                                mships = memberships{e};
-                            end
+                        % Scale memberships (optional)
+                        if zscale == true || sum(zthresh ~= 0, 'all') > 0
+                            mships = zscore(memberships{e});
+                        else
+                            mships = memberships{e};
+                        end
 
-                            if sum(zthresh ~= 0, 'all') > 0
-                                for z = 1:numel(zthresh)
-                                    K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
-
-                                    % Connectivity
-                                    kax = subplot(2, 5, [9 10]); hold on;   % subplot(numel(h{e,s,t,c})*2, 5, [9 10]); hold on;
-                                    sgtitle([titles{e}, ' Component ', num2str(h{e,s,t,c}(j)), ' ', labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}], 'FontSize',18);
-                                    a = squeeze(memberships{e}(:,h{e,s,t,c}(j)))*squeeze(memberships{e}(:,h{e,s,t,c}(j)))';
-                                    imagesc(a); colorbar; hold on;
-                                    xlim([1 size(a,2)]); ylim([1 size(a,1)]);
-                                    yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 3); xticks([]);
-                                    title("Connectivity", 'FontSize',16); pbaspect([1 1 1]);
-
-                                    % Histogram of component entropies
-                                    kax = subplot(2, 5, [4 5]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
-                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'Normalization','pdf');
-                                    histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'Normalization','pdf');
-                                    legend(labels(C{e}(c,:)));
-                                    title("Entropy", 'FontSize',16);
-                                    ylabel('Probability'); xlabel('Mean Entropy');
-                                    
-                                    % Brain Renderings
-                                    kax = subplot(2, 5, [2 3 7 8]); hold on;  % subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                                    plot_nodes_in_cortex(cortex, mships(:,h{e,s,t,c}(j)), coords_ROI, origin, sphereScale, zthresh(z), [], cind, [], [], rdux);
-                                    % Note: if want to weight node color by
-                                    % "strength of association, must encode weighting in cind.node
-                                    
-                                    % Bar Plots
-                                    kax = subplot(2, 5, [1 6]); hold on;    % subplot(numel(h{e,s,t,c})*2, 5, [1 6]); hold on;
-                                    if sum(sign(squeeze(memberships{e}(:,h{e,s,t,c}(j))))) >= 0
-                                        ind(:,1) = squeeze(mships(:,h{e,s,t,c}(j))) < -zthresh(z);	% select node weights which surpass threshold
-                                        ind(:,2) = squeeze(mships(:,h{e,s,t,c}(j))) > zthresh(z);	% select node weights which surpass threshold
-                                        ind(:,3) = squeeze(mships(:,h{e,s,t,c}(j))) > -zthresh(z) & squeeze(mships(:,h{e,s,t,c}(j))) < 0;
-                                        ind(:,4) = squeeze(mships(:,h{e,s,t,c}(j))) < zthresh(z) & squeeze(mships(:,h{e,s,t,c}(j))) > 0;
-                                        a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,1)) = 0; barh(1:N{e,s}.ROI, a, 'b');
-                                        a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
-                                        a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,3)) = 0; barh(1:N{e,s}.ROI, a, 'b', 'FaceAlpha',0.3);
-                                        a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,4)) = 0; barh(1:N{e,s}.ROI, a, 'r', 'FaceAlpha',0.3);
-                                    elseif sum(sign(squeeze(memberships{e}(:,h{e,s,t,c}(j))))) < 0
-                                        ind(:,1) = squeeze(mships(:,h{e,s,t,c}(j))) > zthresh(z);	% only plot node weights which surpass threshold
-                                        ind(:,2) = squeeze(mships(:,h{e,s,t,c}(j))) < -zthresh(z);	% only plot node weights which surpass threshold
-                                        ind(:,3) = squeeze(mships(:,h{e,s,t,c}(j))) < zthresh(z) & squeeze(mships(:,h{e,s,t,c}(j))) > 0;
-                                        ind(:,4) = squeeze(mships(:,h{e,s,t,c}(j))) > -zthresh(z) & squeeze(mships(:,h{e,s,t,c}(j))) < 0;
-                                        a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,1)) = 0; barh(1:N{e,s}.ROI, a, 'b');
-                                        a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
-                                        a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,3)) = 0; barh(1:N{e,s}.ROI, a, 'b', 'FaceAlpha',0.3);
-                                        a = squeeze(mships(:,h{e,s,t,c}(j))); a(~ind(:,4)) = 0; barh(1:N{e,s}.ROI, a, 'r', 'FaceAlpha',0.3);
-                                    end
-                                    yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
-                                    title("Component Membership", 'FontSize',16, 'Position',[0 93]);
-                                    subtitle(['z-score threshold: ' num2str(zthresh(z))], 'FontSize',12, 'Position',[0 91]);
-                                    xlabel('z-score', 'FontSize',12);
-
-                                    % Save as png file
-                                    saveas(K(kFig-1), fullfile(path{4}, strcat('entroCompare', fname, '_Z', strjoin(split(num2str(zthresh(z)), '.')', ''))), 'png');
-                                end
-                            else
+                        if sum(zthresh ~= 0, 'all') > 0
+                            for z = 1:numel(zthresh)
                                 K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
 
                                 % Connectivity
-                                kax = subplot(2, 5, [9 10]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [9 10]); hold on;
-                                sgtitle([titles{e}, ' Component ', num2str(h{e,s,t,c}(j))], 'FontSize',18);
-                                a = squeeze(memberships{e}(:,h{e,s,t,c}(j)))*squeeze(memberships{e}(:,h{e,s,t,c}(j)))';
+                                kax = subplot(2, 5, [9 10]); hold on;   % subplot(numel(h{e,s,t,c})*2, 5, [9 10]); hold on;
+                                sgtitle([titles{e}, ' Component ', num2str(k(j)), ' ', labels{C{e}(c,1)}, ' vs. ', labels{C{e}(c,2)}], 'FontSize',18);
+                                a = squeeze(memberships{e}(:,k(j)))*squeeze(memberships{e}(:,k(j)))';
                                 imagesc(a); colorbar; hold on;
                                 xlim([1 size(a,2)]); ylim([1 size(a,1)]);
                                 yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 3); xticks([]);
@@ -552,24 +509,32 @@ for c = 1:N{1,1}.comp
 
                                 % Histogram of component entropies
                                 kax = subplot(2, 5, [4 5]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
-                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,1)), 'Normalization','pdf');
-                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,2)), 'Normalization','pdf');
+                                histogram(entro{e,s}(k(j), :, C{e}(c,1)), 'Normalization','pdf');
+                                histogram(entro{e,s}(k(j), :, C{e}(c,2)), 'Normalization','pdf');
                                 legend(labels(C{e}(c,:)));
                                 title("Entropy", 'FontSize',16);
                                 ylabel('Probability'); xlabel('Mean Entropy');
 
-                                % Membership Bar Plots
-                                kax = subplot(2, 5, [1 6]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [1 6]); hold on;
-                                if sum(sign(squeeze(memberships{e}(:,h{e,s,t,c}(j))))) >= 0
-                                    ind(:,1) = (squeeze(mships(:,h{e,s,t,c}(j))) < 0);
-                                    ind(:,2) = (squeeze(mships(:,h{e,s,t,c}(j))) > 0);
-                                    a = squeeze(mships(:,h{e,s,t,c}(j))); a(ind(:,1)) = 0; barh(1:N{e,s}.ROI, a);
-                                    a = squeeze(mships(:,h{e,s,t,c}(j))); a(ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
-                                elseif sum(squeeze(memberships{e}(:,h{e,s,t,c}(j)))) < 0
-                                    ind(:,1) = (squeeze(mships(:,h{e,s,t,c}(j))) > 0);
-                                    ind(:,2) = (squeeze(mships(:,h{e,s,t,c}(j))) < 0);
-                                    a = squeeze(mships(:,h{e,s,t,c}(j))); a(ind(:,1)) = 0; barh(1:N{e,s}.ROI, a);
-                                    a = squeeze(mships(:,h{e,s,t,c}(j))); a(ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
+                                % Bar Plots
+                                kax = subplot(2, 5, [1 6]); hold on;    % subplot(numel(h{e,s,t,c})*2, 5, [1 6]); hold on;
+                                if sum(sign(squeeze(memberships{e}(:,k(j))))) >= 0
+                                    ind(:,1) = squeeze(mships(:,k(j))) < -zthresh(z);	% select node weights which surpass threshold
+                                    ind(:,2) = squeeze(mships(:,k(j))) > zthresh(z);	% select node weights which surpass threshold
+                                    ind(:,3) = squeeze(mships(:,k(j))) > -zthresh(z) & squeeze(mships(:,k(j))) < 0;
+                                    ind(:,4) = squeeze(mships(:,k(j))) < zthresh(z) & squeeze(mships(:,k(j))) > 0;
+                                    a = squeeze(mships(:,k(j))); a(~ind(:,1)) = 0; barh(1:N{e,s}.ROI, a, 'b');
+                                    a = squeeze(mships(:,k(j))); a(~ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
+                                    a = squeeze(mships(:,k(j))); a(~ind(:,3)) = 0; barh(1:N{e,s}.ROI, a, 'b', 'FaceAlpha',0.3);
+                                    a = squeeze(mships(:,k(j))); a(~ind(:,4)) = 0; barh(1:N{e,s}.ROI, a, 'r', 'FaceAlpha',0.3);
+                                elseif sum(sign(squeeze(memberships{e}(:,k(j))))) < 0
+                                    ind(:,1) = squeeze(mships(:,k(j))) > zthresh(z);	% only plot node weights which surpass threshold
+                                    ind(:,2) = squeeze(mships(:,k(j))) < -zthresh(z);	% only plot node weights which surpass threshold
+                                    ind(:,3) = squeeze(mships(:,k(j))) < zthresh(z) & squeeze(mships(:,k(j))) > 0;
+                                    ind(:,4) = squeeze(mships(:,k(j))) > -zthresh(z) & squeeze(mships(:,k(j))) < 0;
+                                    a = squeeze(mships(:,k(j))); a(~ind(:,1)) = 0; barh(1:N{e,s}.ROI, a, 'b');
+                                    a = squeeze(mships(:,k(j))); a(~ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
+                                    a = squeeze(mships(:,k(j))); a(~ind(:,3)) = 0; barh(1:N{e,s}.ROI, a, 'b', 'FaceAlpha',0.3);
+                                    a = squeeze(mships(:,k(j))); a(~ind(:,4)) = 0; barh(1:N{e,s}.ROI, a, 'r', 'FaceAlpha',0.3);
                                 end
                                 yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
                                 title("Component Membership", 'FontSize',16, 'Position',[0 93]);
@@ -577,34 +542,84 @@ for c = 1:N{1,1}.comp
                                 xlabel('z-score', 'FontSize',12);
 
                                 % Brain Renderings
-                                kax = subplot(2, 5, [2 3 7 8]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                                plot_nodes_in_cortex(cortex, mships(:,h{e,s,t,c}(j)), coords_ROI, origin, sphereScale, [], rdux);
+                                kax = subplot(2, 5, [2 3 7 8]); hold on;  % subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
+                                plot_nodes_in_cortex(cortex, mships(:,k(j)), coords_ROI, origin, sphereScale, zthresh(z), [], cind, [], [], rdux);
+                                % Note: if want to weight node color by
+                                % "strength of association, must encode weighting in cind.node
 
                                 % Save as png file
-                                saveas(K(kFig-1), strcat('entroCompare', fname, '_Z', join(split(num2str(zthresh(z)), '.'))), 'png');
+                                saveas(K(kFig-1), fullfile(path{4}, strcat('entroCompare', fname, '_Z', strjoin(split(num2str(zthresh(z)), '.')', ''))), 'png');
                             end
                         else
-                            % Histogram of component entropies
                             K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
-                            for q = 1:size(C{e},2)
-                                histogram(entro{e,s}(h{e,s,t,c}(j), :, C{e}(c,q)), 'Normalization','pdf');
-                            end
+
+                            % Connectivity
+                            kax = subplot(2, 5, [9 10]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [9 10]); hold on;
+                            sgtitle([titles{e}, ' Component ', num2str(k(j))], 'FontSize',18);
+                            a = squeeze(memberships{e}(:,k(j)))*squeeze(memberships{e}(:,k(j)))';
+                            imagesc(a); colorbar; hold on;
+                            xlim([1 size(a,2)]); ylim([1 size(a,1)]);
+                            yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 3); xticks([]);
+                            title("Connectivity", 'FontSize',16); pbaspect([1 1 1]);
+
+                            % Histogram of component entropies
+                            kax = subplot(2, 5, [4 5]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
+                            histogram(entro{e,s}(k(j), :, C{e}(c,1)), 'Normalization','pdf');
+                            histogram(entro{e,s}(k(j), :, C{e}(c,2)), 'Normalization','pdf');
                             legend(labels(C{e}(c,:)));
-                            title(strjoin({'Entropy of', char(labels_ROI(h{e,s,t,c}(j))), 'in', spaces{s}, 'Space'}));
-                            ylabel('Counts'); xlabel('Entropy');
+                            title("Entropy", 'FontSize',16);
+                            ylabel('Probability'); xlabel('Mean Entropy');
+
+                            % Membership Bar Plots
+                            kax = subplot(2, 5, [1 6]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [1 6]); hold on;
+                            if sum(sign(squeeze(memberships{e}(:,k(j))))) >= 0
+                                ind(:,1) = (squeeze(mships(:,k(j))) < 0);
+                                ind(:,2) = (squeeze(mships(:,k(j))) > 0);
+                                a = squeeze(mships(:,k(j))); a(ind(:,1)) = 0; barh(1:N{e,s}.ROI, a);
+                                a = squeeze(mships(:,k(j))); a(ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
+                            elseif sum(squeeze(memberships{e}(:,k(j)))) < 0
+                                ind(:,1) = (squeeze(mships(:,k(j))) > 0);
+                                ind(:,2) = (squeeze(mships(:,k(j))) < 0);
+                                a = squeeze(mships(:,k(j))); a(ind(:,1)) = 0; barh(1:N{e,s}.ROI, a);
+                                a = squeeze(mships(:,k(j))); a(ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
+                            end
+                            yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
+                            title("Component Membership", 'FontSize',16, 'Position',[0 93]);
+                            subtitle(['z-score threshold: ' num2str(zthresh(z))], 'FontSize',12, 'Position',[0 91]);
+                            xlabel('z-score', 'FontSize',12);
+
+                            % Brain Renderings
+                            kax = subplot(2, 5, [2 3 7 8]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
+                            plot_nodes_in_cortex(cortex, mships(:,k(j)), coords_ROI, origin, sphereScale, [], rdux);
 
                             % Save as png file
-                            saveas(K(kFig-1), fullfile(path{4}, strcat('entroCompare', fname, '_Component', num2str(h{e,s,t,c}(j)))), 'png');
+                            saveas(K(kFig-1), strcat('entroCompare', fname, '_Z', join(split(num2str(zthresh(z)), '.'))), 'png');
                         end
+                    else
+                        % Histogram of component entropies
+                        K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
+                        for q = 1:size(C{e},2)
+                            histogram(entro{e,s}(k(j), :, C{e}(c,q)), 'Normalization','pdf');
+                        end
+                        legend(labels(C{e}(c,:)));
+                        title(strjoin({'Entropy of', char(labels_ROI(k(j))), 'in', spaces{s}, 'Space'}));
+                        ylabel('Counts'); xlabel('Entropy');
+
+                        % Save as png file
+                        saveas(K(kFig-1), fullfile(path{4}, strcat('entroCompare', fname, '_Component', num2str(k(j)))), 'png');
                     end
                 end
             end
         end
 	end
 end
-clear e s t q B n ax n k j a  hg f mships m ind
+clear e s t q B n ax n k j a hg f mships m ind
 
 % Add kFigs to F
+if N{1,1}.comp > 1
+    close(F(nFig-2:nFig-1));
+    nFig = nFig-2;
+end
 for k = 1:kFig-1
 	F(nFig) = K(k); nFig = nFig + 1;
 end
@@ -678,7 +693,7 @@ clear K k kFig
 
 
 %% Save results
-% 
-savefig(F, fullfile(path{4}, strcat('entroCompare', fname)), 'compact');
-clear F nFig
-save(strcat('entroCompare', fname));
+
+% savefig(F, fullfile(path{4}, strcat('entroCompare', fname)), 'compact');
+% clear F nFig
+% save(strcat('entroCompare', fname));
