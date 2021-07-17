@@ -48,7 +48,6 @@ z = a*z;
 [r, c] = find(str{:,:});
 
 % Locate significant connections
-V = V/max(abs(V));
 n_strong = find(V > thresh);
 n_weak = find(V < -thresh);
 
