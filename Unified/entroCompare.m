@@ -489,11 +489,17 @@ for c = 1:N{1,1}.comp
 
                         % Scale memberships (optional)
                         if zscale == true || sum(zthresh ~= 0, 'all') > 0
-                            mships = zscore(memberships{e});
+                            mships = squeeze(zscore(memberships{e}(:,k(j))));
                         else
-                            mships = memberships{e};
+                            mships = squeeze(memberships{e}(:,k(j)));
                         end
-
+                        
+                        % Enforce consensus: smaller community should be "positive"
+                        if sum(sign(mships)) > 0
+                            mships = -mships;
+                        end
+                        
+                        % Plot component
                         if sum(zthresh ~= 0, 'all') > 0
                             for z = 1:numel(zthresh)
                                 K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
@@ -509,33 +515,23 @@ for c = 1:N{1,1}.comp
 
                                 % Histogram of component entropies
                                 kax = subplot(2, 5, [4 5]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
-                                histogram(entro{e,s}(k(j), :, C{e}(c,1)), 'Normalization','pdf');
-                                histogram(entro{e,s}(k(j), :, C{e}(c,2)), 'Normalization','pdf');
+                                for f = 1:length(C{e}(c,:))
+                                    histogram(entro{e,s}(k(j), :, C{e}(c,f)), 'Normalization','pdf');
+                                end
                                 legend(labels(C{e}(c,:)));
                                 title("Entropy", 'FontSize',16);
                                 ylabel('Probability'); xlabel('Mean Entropy');
 
                                 % Bar Plots
                                 kax = subplot(2, 5, [1 6]); hold on;    % subplot(numel(h{e,s,t,c})*2, 5, [1 6]); hold on;
-                                if sum(sign(squeeze(memberships{e}(:,k(j))))) >= 0
-                                    ind(:,1) = squeeze(mships(:,k(j))) < -zthresh(z);	% select node weights which surpass threshold
-                                    ind(:,2) = squeeze(mships(:,k(j))) > zthresh(z);	% select node weights which surpass threshold
-                                    ind(:,3) = squeeze(mships(:,k(j))) > -zthresh(z) & squeeze(mships(:,k(j))) < 0;
-                                    ind(:,4) = squeeze(mships(:,k(j))) < zthresh(z) & squeeze(mships(:,k(j))) > 0;
-                                    a = squeeze(mships(:,k(j))); a(~ind(:,1)) = 0; barh(1:N{e,s}.ROI, a, 'b');
-                                    a = squeeze(mships(:,k(j))); a(~ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
-                                    a = squeeze(mships(:,k(j))); a(~ind(:,3)) = 0; barh(1:N{e,s}.ROI, a, 'b', 'FaceAlpha',0.3);
-                                    a = squeeze(mships(:,k(j))); a(~ind(:,4)) = 0; barh(1:N{e,s}.ROI, a, 'r', 'FaceAlpha',0.3);
-                                elseif sum(sign(squeeze(memberships{e}(:,k(j))))) < 0
-                                    ind(:,1) = squeeze(mships(:,k(j))) > zthresh(z);	% only plot node weights which surpass threshold
-                                    ind(:,2) = squeeze(mships(:,k(j))) < -zthresh(z);	% only plot node weights which surpass threshold
-                                    ind(:,3) = squeeze(mships(:,k(j))) < zthresh(z) & squeeze(mships(:,k(j))) > 0;
-                                    ind(:,4) = squeeze(mships(:,k(j))) > -zthresh(z) & squeeze(mships(:,k(j))) < 0;
-                                    a = squeeze(mships(:,k(j))); a(~ind(:,1)) = 0; barh(1:N{e,s}.ROI, a, 'b');
-                                    a = squeeze(mships(:,k(j))); a(~ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
-                                    a = squeeze(mships(:,k(j))); a(~ind(:,3)) = 0; barh(1:N{e,s}.ROI, a, 'b', 'FaceAlpha',0.3);
-                                    a = squeeze(mships(:,k(j))); a(~ind(:,4)) = 0; barh(1:N{e,s}.ROI, a, 'r', 'FaceAlpha',0.3);
-                                end
+                                ind(:,1) = mships < -zthresh(z);	% select node weights which surpass threshold
+                                ind(:,2) = mships > zthresh(z); 	% select node weights which surpass threshold
+                                ind(:,3) = mships > -zthresh(z) & mships < 0;
+                                ind(:,4) = mships < zthresh(z) & mships > 0;
+                                a = mships; a(~ind(:,1)) = 0; barh(1:N{e,s}.ROI, a, 'b');
+                                a = mships; a(~ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
+                                a = mships; a(~ind(:,3)) = 0; barh(1:N{e,s}.ROI, a, 'b', 'FaceAlpha',0.3);
+                                a = mships; a(~ind(:,4)) = 0; barh(1:N{e,s}.ROI, a, 'r', 'FaceAlpha',0.3);
                                 yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
                                 title("Component Membership", 'FontSize',16, 'Position',[0 93]);
                                 subtitle(['z-score threshold: ' num2str(zthresh(z))], 'FontSize',12, 'Position',[0 91]);
@@ -543,7 +539,7 @@ for c = 1:N{1,1}.comp
 
                                 % Brain Renderings
                                 kax = subplot(2, 5, [2 3 7 8]); hold on;  % subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                                plot_nodes_in_cortex(cortex, mships(:,k(j)), coords_ROI, origin, sphereScale, zthresh(z), [], cind, [], [], rdux);
+                                plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, zthresh(z), [], cind, [], [], rdux);
                                 % Note: if want to weight node color by
                                 % "strength of association, must encode weighting in cind.node
 
@@ -573,15 +569,15 @@ for c = 1:N{1,1}.comp
                             % Membership Bar Plots
                             kax = subplot(2, 5, [1 6]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [1 6]); hold on;
                             if sum(sign(squeeze(memberships{e}(:,k(j))))) >= 0
-                                ind(:,1) = (squeeze(mships(:,k(j))) < 0);
-                                ind(:,2) = (squeeze(mships(:,k(j))) > 0);
-                                a = squeeze(mships(:,k(j))); a(ind(:,1)) = 0; barh(1:N{e,s}.ROI, a);
-                                a = squeeze(mships(:,k(j))); a(ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
+                                ind(:,1) = (mships < 0);
+                                ind(:,2) = (mships > 0);
+                                a = mships; a(ind(:,1)) = 0; barh(1:N{e,s}.ROI, a);
+                                a = mships; a(ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
                             elseif sum(squeeze(memberships{e}(:,k(j)))) < 0
-                                ind(:,1) = (squeeze(mships(:,k(j))) > 0);
-                                ind(:,2) = (squeeze(mships(:,k(j))) < 0);
-                                a = squeeze(mships(:,k(j))); a(ind(:,1)) = 0; barh(1:N{e,s}.ROI, a);
-                                a = squeeze(mships(:,k(j))); a(ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
+                                ind(:,1) = (mships > 0);
+                                ind(:,2) = (mships < 0);
+                                a = mships; a(ind(:,1)) = 0; barh(1:N{e,s}.ROI, a);
+                                a = mships; a(ind(:,2)) = 0; barh(1:N{e,s}.ROI, a, 'r');
                             end
                             yticks(1:N{e,s}.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
                             title("Component Membership", 'FontSize',16, 'Position',[0 93]);
@@ -590,7 +586,7 @@ for c = 1:N{1,1}.comp
 
                             % Brain Renderings
                             kax = subplot(2, 5, [2 3 7 8]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                            plot_nodes_in_cortex(cortex, mships(:,k(j)), coords_ROI, origin, sphereScale, [], rdux);
+                            plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, [], rdux);
 
                             % Save as png file
                             saveas(K(kFig-1), strcat('entroCompare', fname, '_Z', join(split(num2str(zthresh(z)), '.'))), 'png');
