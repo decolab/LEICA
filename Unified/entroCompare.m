@@ -76,10 +76,10 @@ end
 clear e f
 
 % Set figure save names
-if numel(unique(comps{:})) == nchoosek(N{1,1}.conditions, 2)
-    fname = strcat('ALL', '_', fname);
+if numel(unique(comps{:})) == numel(labels)
+    fname = strcat('ALL', fname);
 else
-    fname = strcat(strjoin(labels(unique(comps{:})),'v'), '_', fname);
+    fname = strcat(strjoin(labels(unique(comps{:})),'v'), fname);
 end
 
 % Load network labels
@@ -120,11 +120,11 @@ for s = 1:size(FCD,2)
 	for t = 1:size(FCD,1)
 
 		% Plot examples of patient, control FCDs
-		for l = comps{t}    % 1:numel(comps{t})
-			subplot(size(FCD,1), numel(comps{t})+1, find(comps{t}==l)+(numel(C{t})+1)*(t-1));
+		for l = 1:numel(comps{t})
+			subplot(size(FCD,1), numel(comps{t})+1, l+(numel(C{t})+1)*(t-1));
 			colormap jet;
 			ind = find(~mod(round(T.TR*1:T.scan), 25));
-			imagesc(FCD{t,s}.subj{1,l}); colorbar; caxis([-1 1]);
+			imagesc(FCD{t,s}.subj{1,comps{t}(l)}); colorbar; caxis([-1 1]);
 			xticks([]);
 			yticks(ind); yticklabels(round(T.TR.*ind));
 			title([ttls{t}, ', ', labels{l}, ' 1']);
@@ -135,9 +135,9 @@ for s = 1:size(FCD,2)
 		% Measure KS distance between FCD histograms
 		D = cell(size(comps{t}));
 		grp = D;
-        for f = comps{t}
-			D{comps{t}==f} = reshape(cell2mat(FCD{t,s}.subj(:,f)), [numel(cell2mat(FCD{t,s}.subj(:,f))), 1]);
-			grp{comps{t}==f} = string(repmat(labels{f}, [numel(cell2mat(FCD{t,s}.subj(:,f))), 1]));
+        for f = 1:numel(comps{t})
+			D{comps{t}(f)} = reshape(cell2mat(FCD{t,s}.subj(:,comps{t}(f))), [numel(cell2mat(FCD{t,s}.subj(:,comps{t}(f)))), 1]);
+			grp{comps{t}(f)} = string(repmat(labels{comps{t}(f)}, [numel(cell2mat(FCD{t,s}.subj(:,comps{t}(comps{t}(f))))), 1]));
         end
         for c = 1:size(C{t},1)
             a = D{comps{t}==C{t}(c,1)}(:);
@@ -305,8 +305,9 @@ for s = 1:numel(spaces)
 		% Plot all histograms
 		n = n+1;
 		ax(n) = subplot(size(C{t},1)*numel(titles), numel(spaces), n); hold on;
-        for c = unique(C{t})
-            d = entro{t,s}(:,:,c);
+        f = unique(C{t});
+        for c = 1:length(unique(C{t}))
+            d = entro{t,s}(:,:,f(c));
             d = d(isfinite(d));
             h{c} = histogram(d, 'BinWidth',sz, 'Normalization','probability', 'FaceColor',cind.hist(c,:));
         end
@@ -406,10 +407,10 @@ if N{e,s}.comp > 1
             h{e,s} = cell2table(squeeze(k(e,s,:,:)), 'RowNames',ttype, 'VariableNames',vn);
         end
     end
-    save(fullfile(path{4}, strcat(pfix{e}, fname)), 'h');
+%     save(fullfile(path{4}, strcat(pfix{e}, fname)), 'h', '-append');
     h = k;
 else
-    save(fullfile(path{4}, strcat(pfix{e}, fname)), 'h');
+%     save(fullfile(path{4}, strcat(pfix{e}, fname)), 'h', '-append');
     k = h; h = cell(numel(titles), numel(spaces), numel(ttype), 1);
     for e = 1:numel(titles)
         for s = 1:numel(spaces)
@@ -603,7 +604,7 @@ for c = 1:N{1,1}.comp
                             plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, [], rdux);
 
                             % Save as png file
-                            saveas(K(kFig-1), strcat('entroCompare', fname, '_Z', join(split(num2str(zthresh(z)), '.'))), 'png');
+                            saveas(K(kFig-1), fullfile(path{4}, strcat('entroCompare', fname, '_Z', join(split(num2str(zthresh(z)), '.'))), 'png'));
                         end
                     else
                         % Histogram of component entropies
@@ -704,6 +705,6 @@ clear K k kFig
 
 %% Save results
 
-savefig(F, fullfile(path{4}, strcat('entroCompare', fname)), 'compact');
+savefig(F, fullfile(path{4}, strcat('entroCompare_', fname)), 'compact');
 clear F nFig
-save(strcat('entroCompare', fname));
+save(fullfile(path{4}, strcat('entroCompare_', fname)));
