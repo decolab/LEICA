@@ -69,8 +69,11 @@ pval.target = 0.05;
 % Set group on which to define componnets
 compGroup = "Control";
 
+% Determine how to normalize activity
+normal = 'none';    % options: 'none' (no normalization) or 'probability' (normalize time series as probabilities of activation)
+
 % Determine pairwise comparisons to make
-C = ["CONTROL", "ADHD"];    % "all";
+C = "all";
 if strcmpi(C, "all")
     C = nchoosek(1:N.conditions, 2);    % all comparisons
 else
@@ -106,7 +109,7 @@ switch aType.dist
 	case 'exponential'
 		fileName = strcat(fileName, '_EXP');
 end
-if numel(C) == 2
+if numel(C) > 1
     fileName = strsplit(fileName, '/');
     fileName = fullfile(fileName{1}, 'Pairwise', strcat(strjoin(fileName(2:end),'/'), '_', groups(C(1)), 'v', groups(C(2))));
 end
@@ -118,11 +121,11 @@ if numel(fList) == 0
 else
     nIter = numel(fList)+1;
 end
-clear fList					% Find number of previous iterations
+% clear fList					% Find number of previous iterations
 
 % Set full filename
 fileName = strcat(fileName, '_', aType.filter, '_k', num2str(co.mult), '_Iteration', num2str(nIter));
-clear nIter
+% clear nIter
 
 
 %% Set filter
@@ -174,7 +177,7 @@ end
 if strcmpi(compGroup, "ALL")
     dFC.concat = cell2mat(dFC.cond);
 else
-    dFC.concat = cell2mat(dFC.cond(find(matches(groups, compGroup))'));
+    dFC.concat = cell2mat(dFC.cond(find(matches(groups, compGroup, 'IgnoreCase',true))'));
 end
 clear t s c afilt bfilt sc90
 
@@ -183,16 +186,16 @@ F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2,1); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Patient BOLD');
 subplot(2,2,2); imagesc(cell2mat(BOLD(:,2)')); colorbar; title('Control BOLD');
 subplot(2,2,[3 4]); hold on; legend('Patient', 'Control');
-histogram(cell2mat(BOLD(:,1)'), 'Normalization','probability');
-histogram(cell2mat(BOLD(:,2)'), 'Normalization','probability');
+histogram(cell2mat(BOLD(:,1)'), 'Normalization','pdf');
+histogram(cell2mat(BOLD(:,2)'), 'Normalization','pdf');
 
 % Plot dFC signals
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,2,1); imagesc(dFC.cond{1}); colorbar; title('Patient LEdFC');
 subplot(2,2,2); imagesc(dFC.cond{2}); colorbar; title('Control LEdFC');
 subplot(2,2,[3 4]); hold on;
-histogram(dFC.cond{1}, 'Normalization','probability');
-histogram(dFC.cond{2}, 'Normalization','probability');
+histogram(dFC.cond{1}, 'Normalization','pdf');
+histogram(dFC.cond{2}, 'Normalization','pdf');
 legend('Patient', 'Control');
 
 % Compute FCD, power spectra of dFC
@@ -258,12 +261,16 @@ switch aType.segment
             D = squareform(pdist(X));
             D = D(1:N.IC, N.IC:end);
             activities.concat = 1./D;
-            activities.concat = activities.concat./sum(activities.concat, 1);
         else
             activities.concat = 1./D;
-            activities.concat = activities.concat./sum(activities.concat, 1);   % scale as probabilities
         end
         clear D idx
+end
+
+% Normalize activity (if desired)
+switch normal
+    case 'probability'
+        activities.concat = activities.concat./sum(activities.concat, 1);   % scale as probabilities
 end
 meanActivity.concat = mean(activities.concat, 2);
 
@@ -306,8 +313,8 @@ F(N.fig) = figure; hold on; N.fig = N.fig+1;
 subplot(2,3, [1 2]); imagesc(cell2mat(activities.subj(1:N.subjects(1),1)')); colorbar; title('Patient LEICA Activations');
 subplot(2,3, [4 5]); imagesc(cell2mat(activities.subj(1:N.subjects(2),2)')); colorbar; title('Control LEICA Activations');
 subplot(2,3, [3 6]); hold on;
-histogram(cell2mat(activities.subj(1:N.subjects(1),1)), 'Normalization','probability');
-histogram(cell2mat(activities.subj(1:N.subjects(2),2)), 'Normalization','probability');
+histogram(cell2mat(activities.subj(1:N.subjects(1),1)), 'Normalization','pdf');
+histogram(cell2mat(activities.subj(1:N.subjects(2),2)), 'Normalization','pdf');
 legend({'Patient', 'Control'});
 
 % Compute FCD of subject-level ICs
@@ -701,7 +708,7 @@ clear con pat t c pdum f S
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
 ax(2,1) = subplot(2, N.conditions, N.conditions+1:2*N.conditions); hold on;
 for c = 1:N.conditions
-    histogram(ax(2,1), cell2mat(FCD.dFC.subj(1:N.subjects(c),c)), 'Normalization','probability');	% FCD histograms
+    histogram(ax(2,1), cell2mat(FCD.dFC.subj(1:N.subjects(c),c)), 'Normalization','pdf');	% FCD histograms
     ax(1,c) = subplot(2, N.conditions, c); colormap jet             % FCD matrix
     imagesc(ax(1,c), FCD.dFC.subj{1,c}); colorbar; title(["dFC FCD of ", groups(c), num2str(1)]);
 end
@@ -712,7 +719,7 @@ clear ax c
 F(N.fig) = figure; hold on; N.fig = N.fig+1;
 ax(2,1) = subplot(2, N.conditions, N.conditions+1:2*N.conditions); hold on;
 for c = 1:N.conditions
-    histogram(ax(2,1), cell2mat(FCD.IC.subj(1:N.subjects(c),c)), 'Normalization','probability');	% FCD histograms
+    histogram(ax(2,1), cell2mat(FCD.IC.subj(1:N.subjects(c),c)), 'Normalization','pdf');	% FCD histograms
     ax(1,c) = subplot(2, N.conditions, c); colormap jet             % FCD matrix
     imagesc(ax(1,c), FCD.IC.subj{1,c}); colorbar; title(["IC FCD of ", groups(c), num2str(1)]);
 end
@@ -724,11 +731,11 @@ clear ax c
 
 % Get metastability bin sizes
 f = figure; hold on;
-hg{1} = histogram(metastable.dFC{:, groups(1)}, 'Normalization','probability');
-hg{2} = histogram(metastable.dFC{:, groups(2)}, 'Normalization','probability');
+hg{1} = histogram(metastable.dFC{:, groups(1)}, 'Normalization','pdf');
+hg{2} = histogram(metastable.dFC{:, groups(2)}, 'Normalization','pdf');
 sz(1) = min(hg{1}.BinWidth, hg{2}.BinWidth);
-hg{1} = histogram(metastable.IC{:, groups(1)}, 'Normalization','probability');
-hg{2} = histogram(metastable.IC{:, groups(2)}, 'Normalization','probability');
+hg{1} = histogram(metastable.IC{:, groups(1)}, 'Normalization','pdf');
+hg{2} = histogram(metastable.IC{:, groups(2)}, 'Normalization','pdf');
 sz(2) = min(hg{1}.BinWidth, hg{2}.BinWidth);
 close(f); clear hg f
 
@@ -737,8 +744,8 @@ F(N.fig) = figure; hold on; sgtitle('Metastability'); N.fig = N.fig+1;
 ax(1) = subplot(1,2,1); hold on; title('dFC Metastability');
 ax(2) = subplot(1,2,2); hold on; title('IC Metastability');
 for c = 1:N.conditions
-    histogram(ax(1), metastable.dFC{:,groups(c)}, 'BinWidth',sz(1), 'Normalization','probability');
-    histogram(ax(2), metastable.IC{:,groups(c)}, 'BinWidth',sz(2), 'Normalization','probability');
+    histogram(ax(1), metastable.dFC{:,groups(c)}, 'BinWidth',sz(1), 'Normalization','pdf');
+    histogram(ax(2), metastable.IC{:,groups(c)}, 'BinWidth',sz(2), 'Normalization','pdf');
 end
 legend(ax(1), groups);
 legend(ax(2), groups);
@@ -773,8 +780,8 @@ if strcmpi(aType.compress, 'none')
 
 		% Histogram of component entropies
 		kax = subplot(2, 4, [1 2]); hold on;
-		histogram(entro.IC(j,:,1), 'BinWidth',sz, 'Normalization','probability');
-		histogram(entro.IC(j,:,2), 'BinWidth',sz, 'Normalization','probability');
+		histogram(entro.IC(j,:,1), 'BinWidth',sz, 'Normalization','pdf');
+		histogram(entro.IC(j,:,2), 'BinWidth',sz, 'Normalization','pdf');
 		legend(labels.Properties.VariableNames);
 		title('Entropy');
 		ylabel('Counts'); xlabel('Mean Entropy');
