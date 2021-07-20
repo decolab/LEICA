@@ -113,7 +113,7 @@ elseif ~isempty(map)
         
 		mArrow3(p1,p2, 'color',cind.conn, 'stemWidth',0.15, 'tipWidth',0.8, 'facealpha',0.7); hold on;
 	end
-elseif numel(n_strong)>1 && numel(n_weak)>1
+elseif numel(n_strong)>1 || numel(n_weak)>1
     for a = 1:numel(n_strong)
         n = n_strong(a);
         for b=1:a
@@ -143,6 +143,17 @@ elseif numel(n_strong)>1
             c1 = [coord(n,2)+ori(1) coord(n,1)+ori(2) coord(n,3)+ori(3)];
             c2 = [coord(p,2)+ori(1) coord(p,1)+ori(2) coord(p,3)+ori(3)];
             plot3([c1(1) c2(1)],[c1(2) c2(2)],[c1(3) c2(3)], 'Color','r', 'LineWidth',0.75);
+            %cmap(IDX(t),:));
+        end
+    end
+elseif numel(n_weak)>1
+    for a = 1:numel(n_weak)
+        n = n_weak(a);
+        for b=1:a
+            p = n_weak(b);
+            c1 = [coord(n,2)+ori(1) coord(n,1)+ori(2) coord(n,3)+ori(3)];
+            c2 = [coord(p,2)+ori(1) coord(p,1)+ori(2) coord(p,3)+ori(3)];
+            plot3([c1(1) c2(1)],[c1(2) c2(2)],[c1(3) c2(3)], 'Color',cind.conn(2,:), 'LineWidth',0.75);
             %cmap(IDX(t),:));
         end
     end
