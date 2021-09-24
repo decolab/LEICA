@@ -57,7 +57,7 @@ N.fig = 1;
 % Methods key
 aType.filter = 'wideband';  % determine which type of filter to use; highpass or bandpass
 aType.dist = 'cosine';      % for measuring distance: cosine or exponential
-aType.compress = 'LE';      % for compressing matrix: eigenvector, average, or none
+aType.compress = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
 aType.segment = 'ICA';      % determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
 
 % Set number of neighbors to search for in KNN
@@ -68,6 +68,7 @@ pval.target = 0.05;
 
 % Set group on which to define componnets
 compGroup = "Control";
+importIC = fullfile(path{6}, 'FCD90_CIC_COS_WideBand_k1_Iteration2');
 
 % Determine how to normalize activity
 normal = 'none';    % options: 'none' (no normalization) or 'probability' (normalize time series as probabilities of activation)
@@ -82,7 +83,7 @@ end
 N.comp = size(C,1);
 
 % Define test types
-ttype = {'kstest2', 'permutation'};
+ttypes = {'kstest2', 'permutation'};
 
 
 %% Define filename based on parameters
@@ -98,21 +99,30 @@ switch aType.compress
     otherwise
         error("Please select one of the supported compression methods");
 end
-if strcmpi(compGroup, "All")
-    fileName = fullfile('CommonIC', strcat(fileName, '_', aType.segment, '_CIC'));
-else
-    fileName = fullfile('GroupIC', strcat(fileName, '_', aType.segment, '_', compGroup, 'IC'));
-end
 switch aType.dist
 	case 'cosine'
 		fileName = strcat(fileName, '_COS');
 	case 'exponential'
 		fileName = strcat(fileName, '_EXP');
 end
-if numel(C) > 1
+if strcmpi(compGroup, "All")
+    fileName = fullfile('CommonIC', strcat(fileName, '_', aType.segment, '_CommonIC'));
+elseif strcmpi(compGroup, "Import")
+    a = strsplit(importIC, '/');
+    b = strsplit(path{6}, '/');
+    a = a{length(b)+1};
+    fileName = fullfile(a, strcat(fileName, '_', aType.segment, '_', compGroup, 'IC'));
+    clear a b
+else
+    fileName = fullfile('GroupIC', strcat(fileName, '_', aType.segment, '_', compGroup, 'IC'));
+end
+if N.comp == 1
     fileName = strsplit(fileName, '/');
     fileName = fullfile(fileName{1}, 'Pairwise', strcat(strjoin(fileName(2:end),'/'), '_', groups(C(1)), 'v', groups(C(2))));
+else
+    fileName = strjoin([fileName; "All"], '_');
 end
+clear importIC
 
 % Set iteration number
 fList = dir(fullfile(path{6}, strcat(fileName, '*')));	% Get file list
@@ -121,11 +131,11 @@ if numel(fList) == 0
 else
     nIter = numel(fList)+1;
 end
-% clear fList					% Find number of previous iterations
+clear fList
 
 % Set full filename
 fileName = strcat(fileName, '_', aType.filter, '_k', num2str(co.mult), '_Iteration', num2str(nIter));
-% clear nIter
+clear nIter
 
 
 %% Set filter
@@ -176,6 +186,8 @@ for c = 1:N.conditions
 end
 if strcmpi(compGroup, "ALL")
     dFC.concat = cell2mat(dFC.cond);
+elseif strcmpi(compGroup, "IMPORT")
+    dFC.concat = cell2mat(dFC.cond);
 else
     dFC.concat = cell2mat(dFC.cond(find(matches(groups, compGroup, 'IgnoreCase',true))'));
 end
@@ -221,50 +233,72 @@ explainedVar = sum(explained(N.IC+1:end));
 % find(cumsum(eVal)/sum(eVal) > 0.95);
 
 % Compute assembly activity timecourses and memberships
-switch aType.segment
-	case 'ICA'
-		disp('Processing ICs from dFC data');
-		[~, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
-        if ~strcmpi(compGroup,'ALL')
-            dFC.concat = cell2mat(dFC.cond);
+switch compGroup
+    case {'import', 'Import', 'IMPORT'}
+        disp('Loading ICs from import file');
+        e = load(importIC, 'aType', 'N');
+        aType.segment = e.aType.segment;
+        N.IC = e.N.IC; clear e
+        switch aType.segment
+            case 'ICA'
+                load(importIC, 'memberships', 'W');
+                activities.concat = W*dFC.concat;
+            case 'binary'
+                load(importIC, 'memberships', 'idx');
+                activities.concat = zeros(N.IC, length(idx));
+                for i = 1:N.IC
+                    activities.concat(i, :) = (idx == i)';
+                end
+                clear i
+            case 'kmeans'
+                load(importIC, 'memberships', 'D');
+                activities.concat = 1./D;
         end
-        activities.concat = W*dFC.concat;
-	case 'binary'
-		disp('Processing clusters from dFC data');
-		[idx, memberships] = kmeans(dFC.concat', N.IC);
-        if ~strcmpi(compGroup,'ALL')
-            dFC.concat = cell2mat(dFC.cond)';
-            X = vertcat(memberships, dFC.concat);
-            D = squareform(pdist(X));
-            D = D(1:N.IC, N.IC:end);
-            [~,idx] = min(D);
-            activities.concat = zeros(N.IC, size(dFC.concat,2));
-            for i = 1:N.IC
-                activities.concat(i, :) = (idx == i)';
-            end
-            clear D X idx
-        else
-            activities.concat = zeros(N.IC, length(idx));
-            for i = 1:N.IC
-                activities.concat(i, :) = (idx == i)';
-            end
-            clear i idx
+    otherwise
+        switch aType.segment
+            case 'ICA'
+                disp('Processing ICs from dFC data');
+                [~, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
+                if ~strcmpi(compGroup,'ALL') && ~strcmpi(compGroup,'IMPORT')
+                    dFC.concat = cell2mat(dFC.cond);
+                end
+                activities.concat = W*dFC.concat;
+            case 'binary'
+                disp('Processing clusters from dFC data');
+                [idx, memberships] = kmeans(dFC.concat', N.IC);
+                if ~strcmpi(compGroup,'ALL') && ~strcmpi(compGroup,'IMPORT')
+                    dFC.concat = cell2mat(dFC.cond)';
+                    X = vertcat(memberships, dFC.concat);
+                    D = squareform(pdist(X));
+                    D = D(1:N.IC, N.IC:end);
+                    [~,idx] = min(D);
+                    activities.concat = zeros(N.IC, size(dFC.concat,2));
+                    for i = 1:N.IC
+                        activities.concat(i, :) = (idx == i)';
+                    end
+                    clear D X idx
+                else
+                    activities.concat = zeros(N.IC, length(idx));
+                    for i = 1:N.IC
+                        activities.concat(i, :) = (idx == i)';
+                    end
+                    clear i
+                end
+                memberships = memberships';
+            case 'kmeans'
+                disp('Processing clusters from dFC data');
+                [~, memberships, ~, D] = kmeans(dFC.concat', N.IC);
+                memberships = memberships'; D = D';
+                if ~strcmpi(compGroup,'ALL') && ~strcmpi(compGroup,'IMPORT')
+                    dFC.concat = cell2mat(dFC.cond)';
+                    X = vertcat(memberships, dFC.concat);
+                    D = squareform(pdist(X));
+                    D = D(1:N.IC, N.IC:end);
+                    activities.concat = 1./D;
+                else
+                    activities.concat = 1./D;
+                end
         end
-        memberships = memberships';
-	case 'kmeans'
-		disp('Processing clusters from dFC data');
-		[~, memberships, ~, D] = kmeans(dFC.concat', N.IC);
-        memberships = memberships'; D = D';
-        if ~strcmpi(compGroup,'ALL')
-            dFC.concat = cell2mat(dFC.cond)';
-            X = vertcat(memberships, dFC.concat);
-            D = squareform(pdist(X));
-            D = D(1:N.IC, N.IC:end);
-            activities.concat = 1./D;
-        else
-            activities.concat = 1./D;
-        end
-        clear D idx
 end
 
 % Normalize activity (if desired)
@@ -370,19 +404,19 @@ fcomp.dFC = nan(N.ROI, max(N.subjects), N.conditions);
 fcomp.IC = nan(N.IC, max(N.subjects), N.conditions);
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
-		[~, metastable.BOLD(s,c)] = findStability(BOLD{s,c});
-		[~, metastable.dFC(s,c)] = findStability(dFC.subj{s,c});
-		[~, metastable.IC(s,c)] = findStability(activities.subj{s,c});
-		for ass = 1:N.IC
-			entro.IC(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
-			fcomp.IC(ass, s, c) = funccomp(activities.subj{s,c}(ass,:), []);
-		end
-		for roi = 1:N.ROI
-			entro.BOLD(roi, s, c) = HShannon_kNN_k_estimation(BOLD{s,c}(roi,:), co);
-			entro.dFC(roi, s, c) = HShannon_kNN_k_estimation(dFC.subj{s,c}(roi,:), co);
-			fcomp.BOLD(roi, s, c) = funccomp(BOLD{s,c}(roi,:), []);
-			fcomp.dFC(roi, s, c) = funccomp(dFC.subj{s,c}(roi,:), []);
-		end
+        [~, metastable.BOLD(s,c)] = findStability(BOLD{s,c});
+        [~, metastable.dFC(s,c)] = findStability(dFC.subj{s,c});
+        [~, metastable.IC(s,c)] = findStability(activities.subj{s,c});
+        for ass = 1:N.IC
+            entro.IC(ass, s, c) = HShannon_kNN_k_estimation(activities.subj{s,c}(ass,:), co);
+            fcomp.IC(ass, s, c) = funccomp(activities.subj{s,c}(ass,:), []);
+        end
+        for roi = 1:N.ROI
+            entro.BOLD(roi, s, c) = HShannon_kNN_k_estimation(BOLD{s,c}(roi,:), co);
+            entro.dFC(roi, s, c) = HShannon_kNN_k_estimation(dFC.subj{s,c}(roi,:), co);
+            fcomp.BOLD(roi, s, c) = funccomp(BOLD{s,c}(roi,:), []);
+            fcomp.dFC(roi, s, c) = funccomp(dFC.subj{s,c}(roi,:), []);
+        end
 	end
 end
 clear c s ass roi
@@ -553,17 +587,17 @@ fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', groups);
 for c = 1:N.comp
     
     % Test with Kolmogorov-Smirnov, permutation test
-    for t = 1:numel(ttype)
-        disp(['Running ', ttype{t}, ' tests.']);
+    for t = 1:numel(ttypes)
+        disp(['Running ', ttypes{t}, ' tests.']);
 
         % Compare activations
-        [sig.BOLD.h(:,c,t), sig.BOLD.p(:,c,t), sig.BOLD.tstat(:,c,t)] = robustTests(cell2mat(BOLD(:,C(c,1))'), cell2mat(BOLD(:,C(c,2))'), N.ROI, 'p',pval.target, 'testtype',ttype{t});				% Compare ROI time series
-        [sig.dFC.h(:,c,t), sig.dFC.p(:,c,t), sig.dFC.tstat(:,c,t)] = robustTests(dFC.cond{C(c,1)}, dFC.cond{C(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttype{t});					% Compare dFC time series
-        [sig.IC.h(:,c,t), sig.IC.p(:,c,t), sig.IC.tstat(:,c,t)] = robustTests(activities.cond{C(c,1)}, activities.cond{C(c,2)}, N.IC, 'p',pval.target, 'testtype',ttype{t});					% Compare IC time series
+        [sig.BOLD.h(:,c,t), sig.BOLD.p(:,c,t), sig.BOLD.tstat(:,c,t)] = robustTests(cell2mat(BOLD(:,C(c,1))'), cell2mat(BOLD(:,C(c,2))'), N.ROI, 'p',pval.target, 'testtype',ttypes{t});				% Compare ROI time series
+        [sig.dFC.h(:,c,t), sig.dFC.p(:,c,t), sig.dFC.tstat(:,c,t)] = robustTests(dFC.cond{C(c,1)}, dFC.cond{C(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttypes{t});					% Compare dFC time series
+        [sig.IC.h(:,c,t), sig.IC.p(:,c,t), sig.IC.tstat(:,c,t)] = robustTests(activities.cond{C(c,1)}, activities.cond{C(c,2)}, N.IC, 'p',pval.target, 'testtype',ttypes{t});					% Compare IC time series
         
         % Compare complexities
-        [sig.fcomp.BOLD.h(:,c,t), sig.fcomp.BOLD.p(:,c,t), sig.fcomp.BOLD.tstat(:,c,t)] = robustTests(squeeze(fcomp.BOLD(:,:,C(c,1))), squeeze(fcomp.BOLD(:,:,C(c,2))), N.ROI, 'p',pval.target, 'testtype',ttype{t});	% Compare BOLD functional complexities
-        [sig.fcomp.IC.h(:,c,t), sig.fcomp.IC.p(:,c,t), sig.fcomp.IC.tstat(:,c,t)] = robustTests(squeeze(fcomp.IC(:,:,C(c,1))), squeeze(fcomp.IC(:,:,C(c,2))), N.IC, 'p',pval.target, 'testtype',ttype{t});          % Compare IC functional complexities
+        [sig.fcomp.BOLD.h(:,c,t), sig.fcomp.BOLD.p(:,c,t), sig.fcomp.BOLD.tstat(:,c,t)] = robustTests(squeeze(fcomp.BOLD(:,:,C(c,1))), squeeze(fcomp.BOLD(:,:,C(c,2))), N.ROI, 'p',pval.target, 'testtype',ttypes{t});	% Compare BOLD functional complexities
+        [sig.fcomp.IC.h(:,c,t), sig.fcomp.IC.p(:,c,t), sig.fcomp.IC.tstat(:,c,t)] = robustTests(squeeze(fcomp.IC(:,:,C(c,1))), squeeze(fcomp.IC(:,:,C(c,2))), N.IC, 'p',pval.target, 'testtype',ttypes{t});          % Compare IC functional complexities
     end
     
     % Compare dFC FCD distributions
@@ -652,8 +686,8 @@ for c = 1:N.comp
 end
 
 % Run mutiple-comparison correction
-if c > 1
-    for t = 1:numel(ttype)
+if N.comp > 1
+    for t = 1:numel(ttypes)
         
         % BOLD activations
         p_dum = reshape(squeeze(sig.BOLD.p(:,:,t)), [N.comp*N.ROI, 1]);     % reshape p-value array)
@@ -699,7 +733,7 @@ if c > 1
         [sig.fcomp.meanIC.FDR, sig.fcomp.meanIC.Bonferroni, sig.fcomp.meanIC.Sidak] = mCompCorr([], sig.fcomp.meanIC.p(:,t), pval.target);
     end
 end
-clear con pat t c pdum f S
+clear con pat t c pdum f S c
 
 
 %% Visualize FCD Distributions
@@ -812,7 +846,7 @@ if strcmpi(aType.compress, 'none')
 		xlabel('z-score');
 	end
 end
-clear mships j hg sz f ind a
+clear mships j hg sz f ind a c
 
 
 %% Save results

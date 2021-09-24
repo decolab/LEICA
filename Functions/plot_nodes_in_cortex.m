@@ -1,4 +1,4 @@
-function plot_nodes_in_cortex (cortex, V, coord, ori, a, thresh, map, cind, strcont, str, redux)
+function plot_nodes_in_cortex (cortex, V, coord, ori, a, thresh, map, cind, lgnd, str, redux)
 %   PLOT_NODES_IN_CORTEX represents the network of interest in cortical
 % space.
 % INPUTS
@@ -7,6 +7,7 @@ function plot_nodes_in_cortex (cortex, V, coord, ori, a, thresh, map, cind, strc
 %           binary or weighted.
 %   coord:  coordinates for nodes in brain space
 %   ori:    origin of coordinate space
+%   nlgnd:  node labels, arranged as Nx1 string array
 %   a:      scaling parameter: controls size of node markers in cortex
 %   thresh: threshold for highlighting nodes of interest.  May be left
 %           empty if no node(s) should be highlighted.  Absolute value:
@@ -16,7 +17,7 @@ function plot_nodes_in_cortex (cortex, V, coord, ori, a, thresh, map, cind, strc
 %           interest exist.
 %   cind:	structure which defines color index.  cind.node denotes node
 %           color key; cind.conn denotes edge color key.
-%   strcont: strings for figure legend
+%   lgnd:	strings for figure legend
 %   str:    array of nodes to highlight (denotes strength changes).  May be
 %           left empty.
 %   redux:  proportion of surface faces to keep (<1)
@@ -69,8 +70,8 @@ for n = 1:length(V)
 		else
 			surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',cind.node(2,:), 'EdgeColor','none','FaceAlpha',0.1);
 		end
-    elseif V(n)==0
-        surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[1 0 1],'EdgeColor','none','FaceAlpha',0.1);
+    elseif V(n)==0 || isnan(V(n))
+        surf(x+coord(n,2)+ori(1), y+coord(n,1)+ori(2), z+coord(n,3)+ori(3),'FaceColor',[0 0 0],'EdgeColor','none','FaceAlpha',0.1);
     end
 end
 
@@ -90,20 +91,17 @@ if ~isempty(map) && iscell(map)
 				for s = 1:size(l, 1)
 					p2 = [coord(l(s,1),2)+ori(1) coord(l(s,1),1)+ori(2) coord(l(s,1),3)+ori(3)];
 					p1 = [coord(l(s,2),2)+ori(1) coord(l(s,2),1)+ori(2) coord(l(s,2),3)+ori(3)];
-
 					h(f,c) = mArrow3(p1,p2, 'color',cind.conn(c,:), 'stemWidth',0.15, 'tipWidth',0.8, 'facealpha',0.8); hold on;   % sets arrow color to contrast
-                    % h(f,c) = mArrow3(p1,p2, 'color',cind.node(c,:)+[0 1-a(f) 0], 'stemWidth',0.15, 'facealpha',0.7); hold on;   % adjusts arrow color based on total strength
-                    % mArrow3(p1,p2, 'color',cind{c}, 'stemWidth',0.15, 'facealpha', a(f));
 				end
 				clear l
 			end
 		end
 	end
-	if ~isempty(strcont)
+	if ~isempty(lgnd)
 		for c = 1:con
 			l(c) = h(ai(c),c);
 		end
-		legend(l, strcont, 'Location','southoutside');
+		legend(l, lgnd, 'Location','southoutside');
 	end
 elseif ~isempty(map)
 	[l(:,1), l(:,2)] = find(map);
