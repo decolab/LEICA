@@ -46,7 +46,7 @@ clear fpath k
 %% Load data
 
 % Load formatted data
-load(fullfile(path{5}, 'formattedUCLA.mat'));
+load(fullfile(path{5}, 'formattedUCLA_2P.mat'));
 
 % Set figure counter
 N.fig = 1;
@@ -67,20 +67,20 @@ co = HShannon_kNN_k_initialization(1);
 pval.target = 0.05;
 
 % Set group on which to define componnets
-compGroup = "Control";
-importIC = fullfile(path{6}, 'FCD90_CIC_COS_WideBand_k1_Iteration2');
+compGroup = "All";
+% importIC = fullfile(path{6}, 'GroupIC/LE_COS_ICA_ControlIC_ALL_wideband_k1_Iteration1');
 
 % Determine how to normalize activity
 normal = 'none';    % options: 'none' (no normalization) or 'probability' (normalize time series as probabilities of activation)
 
 % Determine pairwise comparisons to make
-C = "all";
-if strcmpi(C, "all")
-    C = nchoosek(1:N.conditions, 2);    % all comparisons
+comps = "all";
+if strcmpi(comps, "all")
+    comps = nchoosek(1:N.conditions, 2);    % all comparisons
 else
-    C = find(matches(groups, C))';
+    comps = find(matches(groups, comps))';
 end
-N.comp = size(C,1);
+N.comp = size(comps,1);
 
 % Define test types
 ttypes = {'kstest2', 'permutation'};
@@ -88,7 +88,7 @@ ttypes = {'kstest2', 'permutation'};
 
 %% Define filename based on parameters
 
-% Set base filename
+% Name compression type
 switch aType.compress
 	case {'LE', 'LEICA', 'eigenvector'}
 		fileName = 'LE';
@@ -99,30 +99,44 @@ switch aType.compress
     otherwise
         error("Please select one of the supported compression methods");
 end
+
+% Name distance measurement
 switch aType.dist
 	case 'cosine'
 		fileName = strcat(fileName, '_COS');
 	case 'exponential'
 		fileName = strcat(fileName, '_EXP');
 end
-if strcmpi(compGroup, "All")
-    fileName = fullfile('CommonIC', strcat(fileName, '_', aType.segment, '_CommonIC'));
-elseif strcmpi(compGroup, "Import")
-    a = strsplit(importIC, '/');
-    b = strsplit(path{6}, '/');
-    a = a{length(b)+1};
-    fileName = fullfile(a, strcat(fileName, '_', aType.segment, '_', compGroup, 'IC'));
-    clear a b
-else
-    fileName = fullfile('GroupIC', strcat(fileName, '_', aType.segment, '_', compGroup, 'IC'));
+
+% Name group which defines ICs
+switch compGroup
+    case {'All', 'ALL', 'all'}
+        fileName = fullfile('Common_ICs', strcat(fileName, '_', aType.segment));
+    case {'Import', 'IMPORT', 'import'}
+        a = strsplit(importIC, '/');
+        b = strsplit(path{6}, '/');
+        a = a{length(b)+1};
+        fileName = fullfile(a, strcat(fileName, '_', aType.segment, '_', compGroup, 'IC'));
+        clear a b
+    otherwise
+        fileName = fullfile(strcat(compGroup,"_ICs"), strcat(fileName, '_', aType.segment));
 end
+
+% Name preprocessing pipeline
+if exist('ncorr', 'var')
+    ncorr = strsplit(ncorr,'+');
+    ncorr = ncorr(end);
+    fileName = fullfile(ncorr, fileName);
+    clear ncorr
+end
+
+% Name: pairwise or all-way comparisons?
 if N.comp == 1
     fileName = strsplit(fileName, '/');
-    fileName = fullfile(fileName{1}, 'Pairwise', strcat(strjoin(fileName(2:end),'/'), '_', groups(C(1)), 'v', groups(C(2))));
+    fileName = fullfile(fileName{1}, 'Pairwise', strcat(strjoin(fileName(2:end),'/'), '_', groups(comps(1)), 'v', groups(comps(2))));
 else
     fileName = strjoin([fileName; "All"], '_');
 end
-clear importIC
 
 % Set iteration number
 fList = dir(fullfile(path{6}, strcat(fileName, '*')));	% Get file list
@@ -228,10 +242,6 @@ N.IC = NumberofIC(dFC.concat);
 [~,~,~,~,explained,~] = pca(dFC.concat');
 explainedVar = sum(explained(N.IC+1:end));
 
-% Check how many eigenvalues needed to explain 95% of variance
-% [eVal, ~] = eig(covarianceMatrix);
-% find(cumsum(eVal)/sum(eVal) > 0.95);
-
 % Compute assembly activity timecourses and memberships
 switch compGroup
     case {'import', 'Import', 'IMPORT'}
@@ -300,6 +310,7 @@ switch compGroup
                 end
         end
 end
+clear importIC
 
 % Normalize activity (if desired)
 switch normal
@@ -591,19 +602,19 @@ for c = 1:N.comp
         disp(['Running ', ttypes{t}, ' tests.']);
 
         % Compare activations
-        [sig.BOLD.h(:,c,t), sig.BOLD.p(:,c,t), sig.BOLD.tstat(:,c,t)] = robustTests(cell2mat(BOLD(:,C(c,1))'), cell2mat(BOLD(:,C(c,2))'), N.ROI, 'p',pval.target, 'testtype',ttypes{t});				% Compare ROI time series
-        [sig.dFC.h(:,c,t), sig.dFC.p(:,c,t), sig.dFC.tstat(:,c,t)] = robustTests(dFC.cond{C(c,1)}, dFC.cond{C(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttypes{t});					% Compare dFC time series
-        [sig.IC.h(:,c,t), sig.IC.p(:,c,t), sig.IC.tstat(:,c,t)] = robustTests(activities.cond{C(c,1)}, activities.cond{C(c,2)}, N.IC, 'p',pval.target, 'testtype',ttypes{t});					% Compare IC time series
+        [sig.BOLD.h(:,c,t), sig.BOLD.p(:,c,t), sig.BOLD.tstat(:,c,t)] = robustTests(cell2mat(BOLD(:,comps(c,1))'), cell2mat(BOLD(:,comps(c,2))'), N.ROI, 'p',pval.target, 'testtype',ttypes{t});				% Compare ROI time series
+        [sig.dFC.h(:,c,t), sig.dFC.p(:,c,t), sig.dFC.tstat(:,c,t)] = robustTests(dFC.cond{comps(c,1)}, dFC.cond{comps(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttypes{t});					% Compare dFC time series
+        [sig.IC.h(:,c,t), sig.IC.p(:,c,t), sig.IC.tstat(:,c,t)] = robustTests(activities.cond{comps(c,1)}, activities.cond{comps(c,2)}, N.IC, 'p',pval.target, 'testtype',ttypes{t});					% Compare IC time series
         
         % Compare complexities
-        [sig.fcomp.BOLD.h(:,c,t), sig.fcomp.BOLD.p(:,c,t), sig.fcomp.BOLD.tstat(:,c,t)] = robustTests(squeeze(fcomp.BOLD(:,:,C(c,1))), squeeze(fcomp.BOLD(:,:,C(c,2))), N.ROI, 'p',pval.target, 'testtype',ttypes{t});	% Compare BOLD functional complexities
-        [sig.fcomp.IC.h(:,c,t), sig.fcomp.IC.p(:,c,t), sig.fcomp.IC.tstat(:,c,t)] = robustTests(squeeze(fcomp.IC(:,:,C(c,1))), squeeze(fcomp.IC(:,:,C(c,2))), N.IC, 'p',pval.target, 'testtype',ttypes{t});          % Compare IC functional complexities
+        [sig.fcomp.BOLD.h(:,c,t), sig.fcomp.BOLD.p(:,c,t), sig.fcomp.BOLD.tstat(:,c,t)] = robustTests(squeeze(fcomp.BOLD(:,:,comps(c,1))), squeeze(fcomp.BOLD(:,:,comps(c,2))), N.ROI, 'p',pval.target, 'testtype',ttypes{t});	% Compare BOLD functional complexities
+        [sig.fcomp.IC.h(:,c,t), sig.fcomp.IC.p(:,c,t), sig.fcomp.IC.tstat(:,c,t)] = robustTests(squeeze(fcomp.IC(:,:,comps(c,1))), squeeze(fcomp.IC(:,:,comps(c,2))), N.IC, 'p',pval.target, 'testtype',ttypes{t});          % Compare IC functional complexities
     end
     
     % Compare dFC FCD distributions
     disp('Comparing dFC FCD.');
-    pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(C(c,1)),C(c,1))), [N.subjects(C(c,1))*T.scan^2, 1]);
-    con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(C(c,2)),C(c,2))), [N.subjects(C(c,2))*T.scan^2, 1]);
+    pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(comps(c,1)),comps(c,1))), [N.subjects(comps(c,1))*T.scan^2, 1]);
+    con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(comps(c,2)),comps(c,2))), [N.subjects(comps(c,2))*T.scan^2, 1]);
     [FCD.dFC.h(c,1), FCD.dFC.p(c,1), FCD.dFC.effsize(c,1)] = kstest2(con, pat);
     [FCD.dFC.p(c,2), ~, FCD.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if FCD.dFC.p(c,2) < pval.target
@@ -614,8 +625,8 @@ for c = 1:N.comp
     
     % Compare IC FCD distributions
     disp('Comparing IC FCD.');
-    con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,1)),C(c,1))), [N.subjects(C(c,1))*T.scan^2, 1]);
-    pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(C(c,2)),C(c,2))), [N.subjects(C(c,2))*T.scan^2, 1]);
+    con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(comps(c,1)),comps(c,1))), [N.subjects(comps(c,1))*T.scan^2, 1]);
+    pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(comps(c,2)),comps(c,2))), [N.subjects(comps(c,2))*T.scan^2, 1]);
     [FCD.IC.h(c,1), FCD.IC.p(c,1), FCD.IC.effsize(c,1)] = kstest2(con, pat);
     [FCD.IC.p(c,2), ~, FCD.IC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if FCD.IC.p(c,2) < pval.target
@@ -626,8 +637,8 @@ for c = 1:N.comp
     
     % Compare subject BOLD metastabilities
     disp('Comparing BOLD metastability.');
-    con = metastable.BOLD{:,groups(C(c,1))}(isfinite(metastable.BOLD{:,groups(C(c,1))}));
-    pat = metastable.BOLD{:,groups(C(c,2))}(isfinite(metastable.BOLD{:,groups(C(c,2))}));
+    con = metastable.BOLD{:,groups(comps(c,1))}(isfinite(metastable.BOLD{:,groups(comps(c,1))}));
+    pat = metastable.BOLD{:,groups(comps(c,2))}(isfinite(metastable.BOLD{:,groups(comps(c,2))}));
     [sig.metastable.BOLD.h(c,1), sig.metastable.BOLD.p(c,1), sig.metastable.BOLD.effsize(c,1)] = kstest2(con, pat);
     [sig.metastable.BOLD.p(c,2), ~, sig.metastable.BOLD.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.metastable.BOLD.p(c,2) < pval.target
@@ -638,8 +649,8 @@ for c = 1:N.comp
 
     % Compare subject dFC metastabilities
     disp('Comparing dFC metastability.');
-    con = metastable.dFC{:,groups(C(c,1))}(isfinite(metastable.dFC{:,groups(C(c,1))}));
-    pat = metastable.dFC{:,groups(C(c,2))}(isfinite(metastable.dFC{:,groups(C(c,2))}));
+    con = metastable.dFC{:,groups(comps(c,1))}(isfinite(metastable.dFC{:,groups(comps(c,1))}));
+    pat = metastable.dFC{:,groups(comps(c,2))}(isfinite(metastable.dFC{:,groups(comps(c,2))}));
     [sig.metastable.dFC.h(c,1), sig.metastable.dFC.p(c,1), sig.metastable.dFC.effsize(c,1)] = kstest2(con, pat);
     [sig.metastable.dFC.p(c,2), ~, sig.metastable.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.metastable.dFC.p(c,2) < pval.target
@@ -650,8 +661,8 @@ for c = 1:N.comp
 
     % Subject IC metastabilities
     disp('Comparing component metastability.');
-    con = metastable.IC{:,groups(C(c,1))}(isfinite(metastable.IC{:,groups(C(c,1))}));
-    pat = metastable.IC{:,groups(C(c,2))}(isfinite(metastable.IC{:,groups(C(c,2))}));
+    con = metastable.IC{:,groups(comps(c,1))}(isfinite(metastable.IC{:,groups(comps(c,1))}));
+    pat = metastable.IC{:,groups(comps(c,2))}(isfinite(metastable.IC{:,groups(comps(c,2))}));
     [sig.metastable.IC.h(c,1), sig.metastable.IC.p(c,1), sig.metastable.IC.effsize(c,1)] = kstest2(con, pat);
     [sig.metastable.IC.p(c,2), ~, sig.metastable.IC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.metastable.IC.p(c,2) < pval.target
@@ -662,8 +673,8 @@ for c = 1:N.comp
 
     % Subject functional complexities
     disp('Comparing subject functional complexity.');
-    con = fcomp.subj{:,groups(C(c,1))}(isfinite(fcomp.subj{:,groups(C(c,1))}));
-    pat = fcomp.subj{:,groups(C(c,2))}(isfinite(fcomp.subj{:,groups(C(c,2))}));
+    con = fcomp.subj{:,groups(comps(c,1))}(isfinite(fcomp.subj{:,groups(comps(c,1))}));
+    pat = fcomp.subj{:,groups(comps(c,2))}(isfinite(fcomp.subj{:,groups(comps(c,2))}));
     [sig.fcomp.meansubj.h(c,1), sig.fcomp.meansubj.p(c,1), sig.fcomp.meansubj.effsize(c,1)] = kstest2(con, pat);
     [sig.fcomp.meansubj.p(c,2), ~, sig.fcomp.meansubj.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.fcomp.meansubj.p(c,2) < pval.target
@@ -674,8 +685,8 @@ for c = 1:N.comp
 
     % IC functional complexities
     disp('Comparing component functional complexity.');
-    con = fcomp.mIC{:,groups(C(c,1))}(isfinite(fcomp.mIC{:,groups(C(c,1))}));
-    pat = fcomp.mIC{:,groups(C(c,2))}(isfinite(fcomp.mIC{:,groups(C(c,2))}));
+    con = fcomp.mIC{:,groups(comps(c,1))}(isfinite(fcomp.mIC{:,groups(comps(c,1))}));
+    pat = fcomp.mIC{:,groups(comps(c,2))}(isfinite(fcomp.mIC{:,groups(comps(c,2))}));
     [sig.fcomp.meanIC.h(c,1), sig.fcomp.meanIC.p(c,1), sig.fcomp.meanIC.effsize(c,1)] = kstest2(con, pat);
     [sig.fcomp.meanIC.p(c,2), ~, sig.fcomp.meanIC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
     if sig.fcomp.meanIC.p(c,2) < pval.target
