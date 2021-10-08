@@ -7,6 +7,7 @@ nc = N.IC;
 N.IC = cell(1, numel(spaces));
 N.IC{strcmpi(spaces, 'dFC')} = N.ROI;
 N.IC{strcmpi(spaces, 'IC')} = nc; clear nc
+nFig = 1;
 
 % file containing cortical atlas
 cortex.file = fullfile(path{7}, cortex.file);
@@ -207,7 +208,7 @@ for s = 1:numel(spaces)
 
     % Test for differences
     for t = 1:numel(ttypes)
-        disp(['Running ', ttypes(t), ' tests on entropy in ', spaces(s), ' space.']);
+        disp(strcat("Running ", ttypes(t), " tests on entropy in ", spaces(s), " space."));
         for c = 1:N.comp
             % Run comparisons
             disp(strjoin(['Comparing', labels(comps(c,1)), 'and', labels(comps(c,2))], ' '));
@@ -241,8 +242,8 @@ end
 for s = 1:numel(spaces)
     h{s} = cell2table(squeeze(k(s,:,:)), 'RowNames',ttypes, 'VariableNames',vn);
 end
-save(fullfile(path{4}, fname), 'labels', 'h','p','tstat', '-append');
-h = k;
+% save(fullfile(path{4}, fname), 'labels', 'h','p','tstat', '-append');
+% h = k;
 clear d e s t k r c vn
 
 
@@ -263,7 +264,7 @@ for c = 1:N.comp
         for t = 1:numel(ttypes)
 
             % Set index for all components found across all tests
-            k = union(k, h{s, t, c});
+            k = union(k, cell2mat(h{s}{t,c}));
 
             if N.comp > 1
                 % Plot FDR significance level
@@ -296,7 +297,7 @@ for c = 1:N.comp
             ax(2) = subplot(numel(ttypes), numel(spaces), n(2)); 
             n(2) = n(2)+1;
             barh(ax(2), p{s}(:,t,c)); hold on;
-            plot((max(p{s}(:,t,c),[],'all')*1.2).*ones(numel(h{s,t,c}),1), h{s,t,c}, '*r');
+            plot((max(p{s}(:,t,c),[],'all')*1.2).*ones(numel(cell2mat(h{s}{t,c})),1), cell2mat(h{s}{t,c}), '*r');
             title([ttypes(t), ', ', spaces(s), ' space']);    % , labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
             ylabel('Component'); xlabel('p-value');
 
@@ -306,7 +307,7 @@ for c = 1:N.comp
             ax(1) = subplot(numel(ttypes), numel(spaces), n(1));
             n(1) = n(1)+1;
             barh(ax(1), tstat{s}(:,t,c)); hold on;
-            plot(sign(tstat{s}(h{s,t,c},t,c)).*(max(abs(tstat{s}(:,t,c)),[],'all')*1.2).*ones(numel(h{s,t,c}),1), h{s,t,c}, '*r');
+            plot(sign(tstat{s}(cell2mat(h{s}{t,c}),t,c)).*(max(abs(tstat{s}(:,t,c)),[],'all')*1.2).*ones(numel(cell2mat(h{s}{t,c})),1), cell2mat(h{s}{t,c}), '*r');
             title([ttypes(t), ', ', spaces(s), ' space']);    %, labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
             ylabel('Component'); xlabel('Effect Size');
         end
@@ -323,7 +324,7 @@ for c = 1:N.comp
                 if strncmpi(spaces(s), 'IC', 2)
 
                     % Scale memberships (optional)
-                    if zscale == true || sum(z.thresh ~= 0, 'all') > 0
+                    if z.scale == true || sum(z.thresh ~= 0, 'all') > 0
                         mships = squeeze(zscore(memberships(:,k(j))));
                     else
                         mships = squeeze(memberships(:,k(j)));
@@ -336,7 +337,7 @@ for c = 1:N.comp
 
                     % Plot component
                     if sum(z.thresh ~= 0, 'all') > 0
-                        for z = 1:numel(z.thresh)
+                        for zi = 1:numel(z.thresh)
                             K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
 
                             % Connectivity
@@ -361,26 +362,26 @@ for c = 1:N.comp
 
                             % Bar Plots
                             kax = subplot(2, 5, [1 6]); hold on;    % subplot(numel(h{e,s,t,c})*2, 5, [1 6]); hold on;
-                            ind(:,1) = mships < -z.thresh(z);	% select node weights which surpass threshold
-                            ind(:,2) = mships > z.thresh(z); 	% select node weights which surpass threshold
-                            ind(:,3) = mships > -z.thresh(z) & mships < 0;
-                            ind(:,4) = mships < z.thresh(z) & mships > 0;
+                            ind(:,1) = mships < -z.thresh(zi);	% select node weights which surpass threshold
+                            ind(:,2) = mships > z.thresh(zi); 	% select node weights which surpass threshold
+                            ind(:,3) = mships > -z.thresh(zi) & mships < 0;
+                            ind(:,4) = mships < z.thresh(zi) & mships > 0;
                             a = mships; a(~ind(:,1)) = 0; barh(1:N.ROI, a, 'b');
                             a = mships; a(~ind(:,2)) = 0; barh(1:N.ROI, a, 'r');
                             a = mships; a(~ind(:,3)) = 0; barh(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
                             a = mships; a(~ind(:,4)) = 0; barh(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
                             yticks(1:N.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
                             title("Component Membership", 'FontSize',16);                           % , 'Position',[0 93]);
-                            subtitle(['z-score threshold: ' num2str(z.thresh(z))], 'FontSize',12);   % , 'Position',[0 91]);
+                            subtitle(['z-score threshold: ' num2str(z.thresh(zi))], 'FontSize',12);   % , 'Position',[0 91]);
                             xlabel('z-score', 'FontSize',12);
 
                             % Brain Renderings
                             kax = subplot(2, 5, [2 3 7 8]); hold on;  % subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                            plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, z.thresh(z), [], cind, [], [], rdux);
+                            plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, z.thresh(zi), [], cind, [], [], rdux);
                             % Note: if want to weight node color by strength of association, must encode weighting in cind.node
 
                             % Save as png file
-                            saveas(K(kFig-1), fullfile(path{4}, strjoin([fname, strcat(labels(comps(c,1)),'v',labels(comps(c,2))), strjoin(["Z", strjoin(split(num2str(z.thresh(z)), '.'),'')], '')], '_')), 'png');
+                            saveas(K(kFig-1), fullfile(path{4}, strjoin([fname, strcat(labels(comps(c,1)),'v',labels(comps(c,2))), strjoin(["Z", strjoin(split(num2str(z.thresh(zi)), '.'),'')], '')], '_')), 'png');
                         end
                     else
                         K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
@@ -417,15 +418,15 @@ for c = 1:N.comp
                         end
                         yticks(1:N.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
                         title("Component Membership", 'FontSize',16, 'Position',[0 93]);
-                        subtitle(['z-score threshold: ' num2str(z.thresh(z))], 'FontSize',12, 'Position',[0 91]);
+                        subtitle(['z-score threshold: ' num2str(z.thresh(zi))], 'FontSize',12, 'Position',[0 91]);
                         xlabel('z-score', 'FontSize',12);
 
                         % Brain Renderings
                         kax = subplot(2, 5, [2 3 7 8]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                        plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, z.thresh(z), [], cind, [], [], rdux);
+                        plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, z.thresh(zi), [], cind, [], [], rdux);
                         
                         % Save as png file
-                        saveas(K(kFig-1), fullfile(path{4}, strjoin([fname, strcat(labels(comps(c,1)),'v',labels(comps(c,2))), strjoin(['Z', split(num2str(z.thresh(z)), '.')], '')], '_')), 'png');
+                        saveas(K(kFig-1), fullfile(path{4}, strjoin([fname, strcat(labels(comps(c,1)),'v',labels(comps(c,2))), strjoin(['Z', split(num2str(z.thresh(zi)), '.')], '')], '_')), 'png');
                     end
                 else
                     % Histogram of component entropies
