@@ -42,6 +42,7 @@ for k = 1:numel(fpath)-1
 	addpath(fpath{k});
 end
 addpath(genpath(fpath{numel(fpath)}));
+addpath(fullfile(path{1},'MATLAB','spm12'));
 clear fpath k
 
 
@@ -86,6 +87,23 @@ N.comp = size(comps,1);
 
 % Define test type(s)
 ttypes = ["kstest2", "permutation"];
+
+%% Set comparison parameters
+
+% Determine whether to z-scale membership weights
+z.thresh = 1:0.2:1.6;
+z.scale = false;
+
+% set color index for histograms, cortex network plots
+cind.hist = [0 0 0; 0 0 1; 1 0 0; 0 1 0];
+cind.node = [1 0 0; 0 0 1];
+cind.conn = [1 0 0; 0 0 1];
+
+% Set decompositions, spaces, comparisions
+spaces = ["dFC" "IC"];					% space in which to compare
+dim = ["Subject" "Component"];			% dimensions to compare
+pTarget = 0.05;							% target p-value
+prange = 0.025:0.025:0.1;				% Set range of p-values to test
 
 
 %% Define filename based on parameters
@@ -441,6 +459,8 @@ entro.mIC = array2table(entro.mIC, 'VariableNames', groups);
 fcomp.subj = array2table(fcomp.subj, 'VariableNames', groups);
 fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', groups);
 
+% Run comparison with entropy
+[F, h, p, tstat, FDR, Sidak] = compareComponents(path, z, cind, spaces, dim, ttypes, pTarget, prange, origin, cortex, sphereScale, rdux, ROI, entro, N, memberships, I.Properties.VariableNames, comps);
 
 
 %% Power spectral and periodogram analysis of ICs
