@@ -25,7 +25,7 @@ addpath(fullfile(path{1},'MATLAB','spm12'));
 
 % Determine whether to z-scale membership weights
 z.thresh = 1:0.2:1.6;
-zscale = false;
+z.scale = false;
 
 % set color index for histograms, cortex network plots
 cind.hist = [0 0 0; 0 0 1; 1 0 0; 0 1 0];
@@ -37,9 +37,9 @@ fname = "GMR/Control_ICs/LE_COS_ICA_All_wideband_k1_Iteration1";
 
 % Set decompositions, spaces, comparisions
 nFig = 1;
-spaces = {'dFC' 'IC'};					% space in which to compare
-dim = {'Subject', 'Component'};			% dimensions to compare
-ttypes = {'kstest2', 'permutation'};	% set test types to run
+spaces = ["dFC" "IC"];					% space in which to compare
+dim = ["Subject" "Component"];			% dimensions to compare
+ttypes = ["kstest2" "permutation"];     % set test types to run
 pTarget = 0.05;							% target p-value
 prange = 0.025:0.025:0.1;				% Set range of p-values to test
 
@@ -146,7 +146,7 @@ for d = 1:numel(dim)			% dimension average to display
                 end
                 means(comps(c,:), h(c,:), sig.av.h(s,d,c,:));     % Plot means, distances for significant differences
             end
-            title([dim{d}, 'Mean, ', spaces{s}, ' Space']);
+            title([dim(d), 'Mean, ', spaces(s), ' Space']);
             sgtitle(strjoin(labels(comps), ' vs. '));
             legend(labels(comps), 'location','northwest');
             xlabel('Mean Entropy'); ylabel('Probability');
@@ -165,9 +165,9 @@ n = 0;
 for s = 1:numel(spaces)
         
         % Reshape entropy
-        d = nan(numel(entro.(spaces{s})(:,:,1)), N.conditions);
+        d = nan(numel(entro.(spaces(s))(:,:,1)), N.conditions);
         for c = 1:N.conditions
-            d(:,c) = reshape(entro.(spaces{s})(:,:,c), [numel(entro.(spaces{s})(:,:,c)), 1]);
+            d(:,c) = reshape(entro.(spaces(s))(:,:,c), [numel(entro.(spaces(s))(:,:,c)), 1]);
         end
         
         % Run comparisons
@@ -180,7 +180,7 @@ for s = 1:numel(spaces)
         end
             
         % Get bin sizes
-        d = reshape(entro.(spaces{s}), [N.IC{s}*max(N.subjects) N.conditions]);
+        d = reshape(entro.(spaces(s)), [N.IC{s}*max(N.subjects) N.conditions]);
         sz = binWidth(d, 2);
         
 		% Plot all histograms
@@ -188,7 +188,7 @@ for s = 1:numel(spaces)
 		ax(n) = subplot(size(comps,1), numel(spaces), n); hold on;
         f = unique(comps);
         for c = 1:N.conditions
-            d = entro.(spaces{s})(:,:,f(c));
+            d = entro.(spaces(s))(:,:,f(c));
             d = d(isfinite(d));
             h{c} = histogram(d, 'BinWidth',sz, 'Normalization','probability', 'FaceColor',cind.hist(f(c),:));
         end
@@ -205,7 +205,7 @@ for s = 1:numel(spaces)
                 n = n+1;
                 ax(n) = subplot((1+size(comps,1)), numel(spaces), n); hold on;
                 for f = comps(c,:)
-                    d = entro.(spaces{s})(:,:,f);
+                    d = entro.(spaces(s))(:,:,f);
                     d = d(isfinite(d));
                     h{c,f} = histogram(d, 'BinWidth',sz, 'Normalization','probability', 'FaceColor',cind.hist(f,:));
                 end
@@ -217,7 +217,7 @@ for s = 1:numel(spaces)
             legend(ax(n), labels(unique(comps)), 'location','northwest');
         end
         
-		title(['Entropy in ' spaces{s} ' Space']);
+		title(['Entropy in ' spaces(s) ' Space']);
 		ylabel('Probability'); xlabel('Entropy');
 end
 clear s t h p a mc mp i n hg sz d c f sg
@@ -248,11 +248,11 @@ for s = 1:numel(spaces)
 
     % Test for differences
     for t = 1:numel(ttypes)
-        disp(['Running ', ttypes{t}, ' tests on entropy in ', spaces{s}, ' space.']);
+        disp(['Running ', ttypes(t), ' tests on entropy in ', spaces(s), ' space.']);
         for c = 1:N.comp
             % Run comparisons
             disp(strjoin(['Comparing', labels(comps(c,1)), 'and', labels(comps(c,2))], ' '));
-            [h{s}(:,t,c), p{s}(:,t,c), tstat{s}(:,t,c)] = robustTests(squeeze(entro.(spaces{s})(:,1:N.subjects(comps(c,1)),comps(c,1))), squeeze(entro.(spaces{s})(:,1:N.subjects(comps(c,2)),comps(c,2))), [], 'p',prange, 'testtype',ttypes{t});
+            [h{s}(:,t,c), p{s}(:,t,c), tstat{s}(:,t,c)] = robustTests(squeeze(entro.(spaces(s))(:,1:N.subjects(comps(c,1)),comps(c,1))), squeeze(entro.(spaces(s))(:,1:N.subjects(comps(c,2)),comps(c,2))), [], 'p',prange, 'testtype',ttypes(t));
         end
 
         % Multiple comparison correction
@@ -316,7 +316,7 @@ for c = 1:N.comp
                 xticks(ax(4), 1:numel(prange));
                 xticklabels(ax(4), strsplit(num2str(prange))); hold on;
                 xlabel('FDR Significant'); ylabel('Component');
-                title([ttypes{t}, ', ', spaces{s}, ' space']);
+                title([ttypes(t), ', ', spaces(s), ' space']);
 
                 % Plot Sidak significance level
                 figure(F(nFig-1));
@@ -328,7 +328,7 @@ for c = 1:N.comp
                 xticks(ax(3), 1:numel(prange));
                 xticklabels(ax(3), strsplit(num2str(prange))); hold on;
                 xlabel('Sidak Significant'); ylabel('Component');
-                title([ttypes{t}, ', ', spaces{s}, ' space']);    % , labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
+                title([ttypes(t), ', ', spaces(s), ' space']);    % , labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
             end
 
             % Display test p-values
@@ -338,7 +338,7 @@ for c = 1:N.comp
             n(2) = n(2)+1;
             barh(ax(2), p{s}(:,t,c)); hold on;
             plot((max(p{s}(:,t,c),[],'all')*1.2).*ones(numel(h{s,t,c}),1), h{s,t,c}, '*r');
-            title([ttypes{t}, ', ', spaces{s}, ' space']);    % , labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
+            title([ttypes(t), ', ', spaces(s), ' space']);    % , labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
             ylabel('Component'); xlabel('p-value');
 
             % Display test effect sizes
@@ -348,7 +348,7 @@ for c = 1:N.comp
             n(1) = n(1)+1;
             barh(ax(1), tstat{s}(:,t,c)); hold on;
             plot(sign(tstat{s}(h{s,t,c},t,c)).*(max(abs(tstat{s}(:,t,c)),[],'all')*1.2).*ones(numel(h{s,t,c}),1), h{s,t,c}, '*r');
-            title([ttypes{t}, ', ', spaces{s}, ' space']);    %, labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
+            title([ttypes(t), ', ', spaces(s), ' space']);    %, labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
             ylabel('Component'); xlabel('Effect Size');
         end
 
@@ -357,14 +357,14 @@ for c = 1:N.comp
             for j = 1:numel(k)
 
                 % Get bin sizes
-                d = squeeze(entro.(spaces{s})(k(j),:,comps));
+                d = squeeze(entro.(spaces(s))(k(j),:,comps));
                 sz = binWidth(d, 2);
 
                 % Plot results
-                if strncmpi(spaces{s}, 'IC', 2)
+                if strncmpi(spaces(s), 'IC', 2)
 
                     % Scale memberships (optional)
-                    if zscale == true || sum(z.thresh ~= 0, 'all') > 0
+                    if z.scale == true || sum(z.thresh ~= 0, 'all') > 0
                         mships = squeeze(zscore(memberships(:,k(j))));
                     else
                         mships = squeeze(memberships(:,k(j)));
@@ -392,7 +392,7 @@ for c = 1:N.comp
                             % Histogram of component entropies
                             kax = subplot(2, 5, [4 5]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
                             for f = 1:length(comps(c,:))
-                                d = entro.(spaces{s})(k(j), :, comps(c,f));
+                                d = entro.(spaces(s))(k(j), :, comps(c,f));
                                 d = d(isfinite(d));
                                 histogram(d, 'BinWidth',sz, 'Normalization','probability');
                             end
@@ -437,8 +437,8 @@ for c = 1:N.comp
 
                         % Histogram of component entropies
                         kax = subplot(2, 5, [4 5]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [4 5]); hold on;
-                        histogram(entro.(spaces{s})(k(j), :, comps(c,1)), 'BinWidth',sz, 'Normalization','probability');
-                        histogram(entro.(spaces{s})(k(j), :, comps(c,2)), 'BinWidth',sz, 'Normalization','probability');
+                        histogram(entro.(spaces(s))(k(j), :, comps(c,1)), 'BinWidth',sz, 'Normalization','probability');
+                        histogram(entro.(spaces(s))(k(j), :, comps(c,2)), 'BinWidth',sz, 'Normalization','probability');
                         legend(labels(comps(c,:)));
                         title("Entropy", 'FontSize',16);
                         ylabel('Probability'); xlabel('Mean Entropy');
@@ -472,12 +472,12 @@ for c = 1:N.comp
                     % Histogram of component entropies
                     K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
                     for q = 1:size(comps,2)
-                        en = entro.(spaces{s})(k(j), :, comps(c,q));
+                        en = entro.(spaces(s))(k(j), :, comps(c,q));
                         en = en(isfinite(en));
                         histogram(en, 'BinWidth',sz, 'Normalization','probability');
                     end
                     legend(labels(comps(c,:)));
-                    title(strjoin({'Entropy of', char(labels_ROI(k(j))), 'in', spaces{s}, 'Space'}));
+                    title(strjoin({'Entropy of', char(labels_ROI(k(j))), 'in', spaces(s), 'Space'}));
                     ylabel('Probability'); xlabel('Entropy');
 
                     % Save as png file
