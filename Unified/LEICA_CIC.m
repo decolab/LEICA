@@ -29,13 +29,15 @@ path{1,1} = strjoin(path{1}(1:end-3),'/');
 path{4,1} = fullfile(path{2}, 'UCLA');
 path{5,1} = fullfile(path{4}, 'Data');
 path{6,1} = fullfile(path{4}, 'Results', 'LEICA');
+path{7,1} = fullfile(path{1}, 'Project','Atlases','AAL');
 
 % Add relevant paths
 fpath{1,1} = fullfile(path{1}, 'MATLAB','spm12');
 fpath{2,1} = fullfile(path{1}, 'MATLAB','FastICA');
 fpath{3,1} = fullfile(path{1}, 'MATLAB','permutationTest');
-fpath{4,1} = fullfile(path{2}, 'Functions');
-fpath{5,1} = fullfile(path{2}, 'LEICA', 'Functions');
+fpath{4,1} = fullfile(path{1}, 'MATLAB','BrainNetViewer');
+fpath{5,1} = fullfile(path{2}, 'Functions');
+fpath{6,1} = fullfile(path{2}, 'LEICA', 'Functions');
 for k = 1:numel(fpath)-1
 	addpath(fpath{k});
 end
@@ -46,7 +48,7 @@ clear fpath k
 %% Load data
 
 % Load formatted data
-load(fullfile(path{5}, 'formattedUCLA_2P.mat'));
+load(fullfile(path{5}, 'formattedUCLA_DiCER.mat'));
 
 % Set figure counter
 N.fig = 1;
@@ -58,7 +60,7 @@ N.fig = 1;
 aType.filter = 'wideband';  % determine which type of filter to use; highpass or bandpass
 aType.dist = 'cosine';      % for measuring distance: cosine or exponential
 aType.compress = 'eigenvector';	% for compressing matrix: eigenvector, average, or none
-aType.segment = 'ICA';      % determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
+aType.segment = 'binary';      % determine which segmentation to use: ICA, kmeans, or binary (k-means: only assigns states as ON or OFF)
 
 % Set number of neighbors to search for in KNN
 co = HShannon_kNN_k_initialization(1);
@@ -82,8 +84,8 @@ else
 end
 N.comp = size(comps,1);
 
-% Define test types
-ttypes = {'kstest2', 'permutation'};
+% Define test type(s)
+ttypes = ["kstest2", "permutation"];
 
 
 %% Define filename based on parameters
@@ -139,17 +141,16 @@ else
 end
 
 % Set iteration number
-fList = dir(fullfile(path{6}, strcat(fileName, '*')));	% Get file list
-if numel(fList) == 0
-    nIter = 1;
-else
-    nIter = numel(fList)+1;
+fList = dir(fullfile(path{6}, strcat(fileName, '*.mat')));	% Get file list
+a = false(numel(fList),1);
+for n = 1:numel(fList)
+    a(n) = matches('entroCompare.mat', strsplit(fList(n).name, '_'));
 end
-clear fList
+nIter = numel(fList)-sum(a)+1;
 
 % Set full filename
 fileName = strcat(fileName, '_', aType.filter, '_k', num2str(co.mult), '_Iteration', num2str(nIter));
-clear nIter
+clear fList nIter a
 
 
 %% Set filter
@@ -198,9 +199,7 @@ for c = 1:N.conditions
 	end
 	dFC.cond{c} = cell2mat(dFC.subj(1:N.subjects(c),c)');
 end
-if strcmpi(compGroup, "ALL")
-    dFC.concat = cell2mat(dFC.cond);
-elseif strcmpi(compGroup, "IMPORT")
+if strcmpi(compGroup, "ALL") || strcmpi(compGroup, "IMPORT")
     dFC.concat = cell2mat(dFC.cond);
 else
     dFC.concat = cell2mat(dFC.cond(find(matches(groups, compGroup, 'IgnoreCase',true))'));
@@ -269,48 +268,45 @@ switch compGroup
             case 'ICA'
                 disp('Processing ICs from dFC data');
                 [~, memberships, W] = fastica(dFC.concat, 'numOfIC', N.IC, 'verbose','off');
-                if ~strcmpi(compGroup,'ALL') && ~strcmpi(compGroup,'IMPORT')
-                    dFC.concat = cell2mat(dFC.cond);
-                end
+                dFC.concat = cell2mat(dFC.cond);
                 activities.concat = W*dFC.concat;
             case 'binary'
                 disp('Processing clusters from dFC data');
                 [idx, memberships] = kmeans(dFC.concat', N.IC);
                 if ~strcmpi(compGroup,'ALL') && ~strcmpi(compGroup,'IMPORT')
-                    dFC.concat = cell2mat(dFC.cond)';
-                    X = vertcat(memberships, dFC.concat);
+                    dFC.concat = cell2mat(dFC.cond);
+                    X = vertcat(memberships, dFC.concat');
                     D = squareform(pdist(X));
-                    D = D(1:N.IC, N.IC:end);
+                    D = D(1:N.IC, N.IC+(1:size(T.index,2)));
                     [~,idx] = min(D);
                     activities.concat = zeros(N.IC, size(dFC.concat,2));
                     for i = 1:N.IC
-                        activities.concat(i, :) = (idx == i)';
+                        activities.concat(i, :) = (idx == i);
                     end
-                    clear D X idx
                 else
                     activities.concat = zeros(N.IC, length(idx));
                     for i = 1:N.IC
                         activities.concat(i, :) = (idx == i)';
                     end
-                    clear i
                 end
                 memberships = memberships';
             case 'kmeans'
                 disp('Processing clusters from dFC data');
                 [~, memberships, ~, D] = kmeans(dFC.concat', N.IC);
-                memberships = memberships'; D = D';
+                D = D';
                 if ~strcmpi(compGroup,'ALL') && ~strcmpi(compGroup,'IMPORT')
-                    dFC.concat = cell2mat(dFC.cond)';
-                    X = vertcat(memberships, dFC.concat);
+                    dFC.concat = cell2mat(dFC.cond);
+                    X = vertcat(memberships, dFC.concat');
                     D = squareform(pdist(X));
-                    D = D(1:N.IC, N.IC:end);
+                    D = D(1:N.IC, 1+N.IC:end);
                     activities.concat = 1./D;
                 else
                     activities.concat = 1./D;
                 end
+                memberships = memberships';
         end
 end
-clear importIC
+clear importIC D X idx i
 
 % Normalize activity (if desired)
 switch normal
@@ -594,157 +590,157 @@ fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', groups);
 
 %% Compare IC metrics between conditions, vs. permuted null distribution
 
-% Loop through all pairwise comparisons
-for c = 1:N.comp
-    
-    % Test with Kolmogorov-Smirnov, permutation test
-    for t = 1:numel(ttypes)
-        disp(['Running ', ttypes{t}, ' tests.']);
-
-        % Compare activations
-        [sig.BOLD.h(:,c,t), sig.BOLD.p(:,c,t), sig.BOLD.tstat(:,c,t)] = robustTests(cell2mat(BOLD(:,comps(c,1))'), cell2mat(BOLD(:,comps(c,2))'), N.ROI, 'p',pval.target, 'testtype',ttypes{t});				% Compare ROI time series
-        [sig.dFC.h(:,c,t), sig.dFC.p(:,c,t), sig.dFC.tstat(:,c,t)] = robustTests(dFC.cond{comps(c,1)}, dFC.cond{comps(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttypes{t});					% Compare dFC time series
-        [sig.IC.h(:,c,t), sig.IC.p(:,c,t), sig.IC.tstat(:,c,t)] = robustTests(activities.cond{comps(c,1)}, activities.cond{comps(c,2)}, N.IC, 'p',pval.target, 'testtype',ttypes{t});					% Compare IC time series
-        
-        % Compare complexities
-        [sig.fcomp.BOLD.h(:,c,t), sig.fcomp.BOLD.p(:,c,t), sig.fcomp.BOLD.tstat(:,c,t)] = robustTests(squeeze(fcomp.BOLD(:,:,comps(c,1))), squeeze(fcomp.BOLD(:,:,comps(c,2))), N.ROI, 'p',pval.target, 'testtype',ttypes{t});	% Compare BOLD functional complexities
-        [sig.fcomp.IC.h(:,c,t), sig.fcomp.IC.p(:,c,t), sig.fcomp.IC.tstat(:,c,t)] = robustTests(squeeze(fcomp.IC(:,:,comps(c,1))), squeeze(fcomp.IC(:,:,comps(c,2))), N.IC, 'p',pval.target, 'testtype',ttypes{t});          % Compare IC functional complexities
-    end
-    
-    % Compare dFC FCD distributions
-    disp('Comparing dFC FCD.');
-    pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(comps(c,1)),comps(c,1))), [N.subjects(comps(c,1))*T.scan^2, 1]);
-    con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(comps(c,2)),comps(c,2))), [N.subjects(comps(c,2))*T.scan^2, 1]);
-    [FCD.dFC.h(c,1), FCD.dFC.p(c,1), FCD.dFC.effsize(c,1)] = kstest2(con, pat);
-    [FCD.dFC.p(c,2), ~, FCD.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
-    if FCD.dFC.p(c,2) < pval.target
-        FCD.dFC.h(c,2) = 1;
-    else
-        FCD.dFC.h(c,2) = 0;
-    end
-    
-    % Compare IC FCD distributions
-    disp('Comparing IC FCD.');
-    con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(comps(c,1)),comps(c,1))), [N.subjects(comps(c,1))*T.scan^2, 1]);
-    pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(comps(c,2)),comps(c,2))), [N.subjects(comps(c,2))*T.scan^2, 1]);
-    [FCD.IC.h(c,1), FCD.IC.p(c,1), FCD.IC.effsize(c,1)] = kstest2(con, pat);
-    [FCD.IC.p(c,2), ~, FCD.IC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
-    if FCD.IC.p(c,2) < pval.target
-        FCD.IC.h(c,2) = 1;
-    else
-        FCD.IC.h(c,2) = 0;
-    end
-    
-    % Compare subject BOLD metastabilities
-    disp('Comparing BOLD metastability.');
-    con = metastable.BOLD{:,groups(comps(c,1))}(isfinite(metastable.BOLD{:,groups(comps(c,1))}));
-    pat = metastable.BOLD{:,groups(comps(c,2))}(isfinite(metastable.BOLD{:,groups(comps(c,2))}));
-    [sig.metastable.BOLD.h(c,1), sig.metastable.BOLD.p(c,1), sig.metastable.BOLD.effsize(c,1)] = kstest2(con, pat);
-    [sig.metastable.BOLD.p(c,2), ~, sig.metastable.BOLD.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
-    if sig.metastable.BOLD.p(c,2) < pval.target
-        sig.metastable.BOLD.h(c,2) = 1;
-    else
-        sig.metastable.BOLD.h(c,2) = 0;
-    end
-
-    % Compare subject dFC metastabilities
-    disp('Comparing dFC metastability.');
-    con = metastable.dFC{:,groups(comps(c,1))}(isfinite(metastable.dFC{:,groups(comps(c,1))}));
-    pat = metastable.dFC{:,groups(comps(c,2))}(isfinite(metastable.dFC{:,groups(comps(c,2))}));
-    [sig.metastable.dFC.h(c,1), sig.metastable.dFC.p(c,1), sig.metastable.dFC.effsize(c,1)] = kstest2(con, pat);
-    [sig.metastable.dFC.p(c,2), ~, sig.metastable.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
-    if sig.metastable.dFC.p(c,2) < pval.target
-        sig.metastable.dFC.h(c,2) = 1;
-    else
-        sig.metastable.dFC.h(c,2) = 0;
-    end
-
-    % Subject IC metastabilities
-    disp('Comparing component metastability.');
-    con = metastable.IC{:,groups(comps(c,1))}(isfinite(metastable.IC{:,groups(comps(c,1))}));
-    pat = metastable.IC{:,groups(comps(c,2))}(isfinite(metastable.IC{:,groups(comps(c,2))}));
-    [sig.metastable.IC.h(c,1), sig.metastable.IC.p(c,1), sig.metastable.IC.effsize(c,1)] = kstest2(con, pat);
-    [sig.metastable.IC.p(c,2), ~, sig.metastable.IC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
-    if sig.metastable.IC.p(c,2) < pval.target
-        sig.metastable.IC.h(c,2) = 1;
-    else
-        sig.metastable.IC.h(c,2) = 0;
-    end
-
-    % Subject functional complexities
-    disp('Comparing subject functional complexity.');
-    con = fcomp.subj{:,groups(comps(c,1))}(isfinite(fcomp.subj{:,groups(comps(c,1))}));
-    pat = fcomp.subj{:,groups(comps(c,2))}(isfinite(fcomp.subj{:,groups(comps(c,2))}));
-    [sig.fcomp.meansubj.h(c,1), sig.fcomp.meansubj.p(c,1), sig.fcomp.meansubj.effsize(c,1)] = kstest2(con, pat);
-    [sig.fcomp.meansubj.p(c,2), ~, sig.fcomp.meansubj.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
-    if sig.fcomp.meansubj.p(c,2) < pval.target
-        sig.fcomp.meansubj.h(c,2) = 1;
-    else
-        sig.fcomp.meansubj.h(c,2) = 0;
-    end
-
-    % IC functional complexities
-    disp('Comparing component functional complexity.');
-    con = fcomp.mIC{:,groups(comps(c,1))}(isfinite(fcomp.mIC{:,groups(comps(c,1))}));
-    pat = fcomp.mIC{:,groups(comps(c,2))}(isfinite(fcomp.mIC{:,groups(comps(c,2))}));
-    [sig.fcomp.meanIC.h(c,1), sig.fcomp.meanIC.p(c,1), sig.fcomp.meanIC.effsize(c,1)] = kstest2(con, pat);
-    [sig.fcomp.meanIC.p(c,2), ~, sig.fcomp.meanIC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
-    if sig.fcomp.meanIC.p(c,2) < pval.target
-        sig.fcomp.meanIC.h(c,2) = 1;
-    else
-        sig.fcomp.meanIC.h(c,2) = 0;
-    end
-end
-
-% Run mutiple-comparison correction
-if N.comp > 1
-    for t = 1:numel(ttypes)
-        
-        % BOLD activations
-        p_dum = reshape(squeeze(sig.BOLD.p(:,:,t)), [N.comp*N.ROI, 1]);     % reshape p-value array)
-        [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
-        sig.BOLD.FDR(:,:,t) = reshape(f, [N.ROI, N.comp]);
-        sig.BOLD.Sidak(:,:,t) = reshape(S, [N.ROI, N.comp]);
-        
-        % dFC activations
-        p_dum = reshape(squeeze(sig.dFC.p(:,:,t)), [N.comp*N.ROI, 1]);      % reshape p-value array)
-        [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
-        sig.dFC.FDR(:,:,t) = reshape(f, [N.ROI, N.comp]);
-        sig.dFC.Sidak(:,:,t) = reshape(S, [N.ROI, N.comp]);
-        
-        % dFC activations
-        p_dum = reshape(squeeze(sig.IC.p(:,:,t)), [N.comp*N.IC, 1]);	% reshape p-value array)
-        [f, ~, S] = mCompCorr([], p_dum, pval.target);                  % run mutliple comparison tests
-        sig.IC.FDR(:,:,t) = reshape(f, [N.IC, N.comp]);
-        sig.IC.Sidak(:,:,t) = reshape(S, [N.IC, N.comp]);
-        
-        % BOLD functional complexity
-        p_dum = reshape(squeeze(sig.fcomp.BOLD.p(:,:,t)), [N.comp*N.ROI, 1]);	% reshape p-value array)
-        [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
-        sig.fcomp.BOLD.FDR(:,:,t) = reshape(f, [N.ROI, N.comp]);
-        sig.fcomp.BOLD.Sidak(:,:,t) = reshape(S, [N.ROI, N.comp]);
-        
-        % Component functional complexity
-        p_dum = reshape(squeeze(sig.fcomp.IC.p(:,:,t)), [N.comp*N.IC, 1]);	% reshape p-value array)
-        [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
-        sig.fcomp.IC.FDR(:,:,t) = reshape(f, [N.IC, N.comp]);
-        sig.fcomp.IC.Sidak(:,:,t) = reshape(S, [N.IC, N.comp]);
-        
-        % FCD Activations
-        [FCD.IC.FDR, FCD.IC.Bonferroni, FCD.IC.Sidak] = mCompCorr([], FCD.IC.p(:,t), pval.target);
-        [FCD.dFC.FDR, FCD.dFC.Bonferroni, FCD.dFC.Sidak] = mCompCorr([], FCD.dFC.p(:,t), pval.target);
-
-        % Metastability
-        [sig.metastable.BOLD.FDR, sig.metastable.BOLD.Bonferroni, sig.metastable.BOLD.Sidak] = mCompCorr([], sig.metastable.BOLD.p(:,t), pval.target);
-        [sig.metastable.dFC.FDR, sig.metastable.dFC.Bonferroni, sig.metastable.dFC.Sidak] = mCompCorr([], sig.metastable.dFC.p(:,t), pval.target);
-        [sig.metastable.IC.FDR, sig.metastable.IC.Bonferroni, sig.metastable.IC.Sidak] = mCompCorr([], sig.metastable.IC.p(:,t), pval.target);
-
-        % Mean Complexities
-        [sig.fcomp.meansubj.FDR, sig.fcomp.meansubj.Bonferroni, sig.fcomp.meansubj.Sidak] = mCompCorr([], sig.fcomp.meansubj.p(:,t), pval.target);
-        [sig.fcomp.meanIC.FDR, sig.fcomp.meanIC.Bonferroni, sig.fcomp.meanIC.Sidak] = mCompCorr([], sig.fcomp.meanIC.p(:,t), pval.target);
-    end
-end
-clear con pat t c pdum f S c
+% % Loop through all pairwise comparisons
+% for c = 1:N.comp
+%     
+%     % Test with Kolmogorov-Smirnov, permutation test
+%     for t = 1:numel(ttypes)
+%         disp(['Running ', ttypes(t), ' tests.']);
+% 
+%         % Compare activations
+%         [sig.BOLD.h(:,c,t), sig.BOLD.p(:,c,t), sig.BOLD.tstat(:,c,t)] = robustTests(cell2mat(BOLD(:,comps(c,1))'), cell2mat(BOLD(:,comps(c,2))'), N.ROI, 'p',pval.target, 'testtype',ttypes(t));				% Compare ROI time series
+%         [sig.dFC.h(:,c,t), sig.dFC.p(:,c,t), sig.dFC.tstat(:,c,t)] = robustTests(dFC.cond{comps(c,1)}, dFC.cond{comps(c,2)}, size(dFC.concat,1), 'p',pval.target, 'testtype',ttypes(t));					% Compare dFC time series
+%         [sig.IC.h(:,c,t), sig.IC.p(:,c,t), sig.IC.tstat(:,c,t)] = robustTests(activities.cond{comps(c,1)}, activities.cond{comps(c,2)}, N.IC, 'p',pval.target, 'testtype',ttypes(t));					% Compare IC time series
+%         
+%         % Compare complexities
+%         [sig.fcomp.BOLD.h(:,c,t), sig.fcomp.BOLD.p(:,c,t), sig.fcomp.BOLD.tstat(:,c,t)] = robustTests(squeeze(fcomp.BOLD(:,:,comps(c,1))), squeeze(fcomp.BOLD(:,:,comps(c,2))), N.ROI, 'p',pval.target, 'testtype',ttypes(t));	% Compare BOLD functional complexities
+%         [sig.fcomp.IC.h(:,c,t), sig.fcomp.IC.p(:,c,t), sig.fcomp.IC.tstat(:,c,t)] = robustTests(squeeze(fcomp.IC(:,:,comps(c,1))), squeeze(fcomp.IC(:,:,comps(c,2))), N.IC, 'p',pval.target, 'testtype',ttypes(t));          % Compare IC functional complexities
+%     end
+%     
+%     % Compare dFC FCD distributions
+%     disp('Comparing dFC FCD.');
+%     pat = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(comps(c,1)),comps(c,1))), [N.subjects(comps(c,1))*T.scan^2, 1]);
+%     con = reshape(cell2mat(FCD.dFC.subj(1:N.subjects(comps(c,2)),comps(c,2))), [N.subjects(comps(c,2))*T.scan^2, 1]);
+%     [FCD.dFC.h(c,1), FCD.dFC.p(c,1), FCD.dFC.effsize(c,1)] = kstest2(con, pat);
+%     [FCD.dFC.p(c,2), ~, FCD.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+%     if FCD.dFC.p(c,2) < pval.target
+%         FCD.dFC.h(c,2) = 1;
+%     else
+%         FCD.dFC.h(c,2) = 0;
+%     end
+%     
+%     % Compare IC FCD distributions
+%     disp('Comparing IC FCD.');
+%     con = reshape(cell2mat(FCD.IC.subj(1:N.subjects(comps(c,1)),comps(c,1))), [N.subjects(comps(c,1))*T.scan^2, 1]);
+%     pat = reshape(cell2mat(FCD.IC.subj(1:N.subjects(comps(c,2)),comps(c,2))), [N.subjects(comps(c,2))*T.scan^2, 1]);
+%     [FCD.IC.h(c,1), FCD.IC.p(c,1), FCD.IC.effsize(c,1)] = kstest2(con, pat);
+%     [FCD.IC.p(c,2), ~, FCD.IC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+%     if FCD.IC.p(c,2) < pval.target
+%         FCD.IC.h(c,2) = 1;
+%     else
+%         FCD.IC.h(c,2) = 0;
+%     end
+%     
+%     % Compare subject BOLD metastabilities
+%     disp('Comparing BOLD metastability.');
+%     con = metastable.BOLD{:,groups(comps(c,1))}(isfinite(metastable.BOLD{:,groups(comps(c,1))}));
+%     pat = metastable.BOLD{:,groups(comps(c,2))}(isfinite(metastable.BOLD{:,groups(comps(c,2))}));
+%     [sig.metastable.BOLD.h(c,1), sig.metastable.BOLD.p(c,1), sig.metastable.BOLD.effsize(c,1)] = kstest2(con, pat);
+%     [sig.metastable.BOLD.p(c,2), ~, sig.metastable.BOLD.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+%     if sig.metastable.BOLD.p(c,2) < pval.target
+%         sig.metastable.BOLD.h(c,2) = 1;
+%     else
+%         sig.metastable.BOLD.h(c,2) = 0;
+%     end
+% 
+%     % Compare subject dFC metastabilities
+%     disp('Comparing dFC metastability.');
+%     con = metastable.dFC{:,groups(comps(c,1))}(isfinite(metastable.dFC{:,groups(comps(c,1))}));
+%     pat = metastable.dFC{:,groups(comps(c,2))}(isfinite(metastable.dFC{:,groups(comps(c,2))}));
+%     [sig.metastable.dFC.h(c,1), sig.metastable.dFC.p(c,1), sig.metastable.dFC.effsize(c,1)] = kstest2(con, pat);
+%     [sig.metastable.dFC.p(c,2), ~, sig.metastable.dFC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+%     if sig.metastable.dFC.p(c,2) < pval.target
+%         sig.metastable.dFC.h(c,2) = 1;
+%     else
+%         sig.metastable.dFC.h(c,2) = 0;
+%     end
+% 
+%     % Subject IC metastabilities
+%     disp('Comparing component metastability.');
+%     con = metastable.IC{:,groups(comps(c,1))}(isfinite(metastable.IC{:,groups(comps(c,1))}));
+%     pat = metastable.IC{:,groups(comps(c,2))}(isfinite(metastable.IC{:,groups(comps(c,2))}));
+%     [sig.metastable.IC.h(c,1), sig.metastable.IC.p(c,1), sig.metastable.IC.effsize(c,1)] = kstest2(con, pat);
+%     [sig.metastable.IC.p(c,2), ~, sig.metastable.IC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+%     if sig.metastable.IC.p(c,2) < pval.target
+%         sig.metastable.IC.h(c,2) = 1;
+%     else
+%         sig.metastable.IC.h(c,2) = 0;
+%     end
+% 
+%     % Subject functional complexities
+%     disp('Comparing subject functional complexity.');
+%     con = fcomp.subj{:,groups(comps(c,1))}(isfinite(fcomp.subj{:,groups(comps(c,1))}));
+%     pat = fcomp.subj{:,groups(comps(c,2))}(isfinite(fcomp.subj{:,groups(comps(c,2))}));
+%     [sig.fcomp.meansubj.h(c,1), sig.fcomp.meansubj.p(c,1), sig.fcomp.meansubj.effsize(c,1)] = kstest2(con, pat);
+%     [sig.fcomp.meansubj.p(c,2), ~, sig.fcomp.meansubj.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+%     if sig.fcomp.meansubj.p(c,2) < pval.target
+%         sig.fcomp.meansubj.h(c,2) = 1;
+%     else
+%         sig.fcomp.meansubj.h(c,2) = 0;
+%     end
+% 
+%     % IC functional complexities
+%     disp('Comparing component functional complexity.');
+%     con = fcomp.mIC{:,groups(comps(c,1))}(isfinite(fcomp.mIC{:,groups(comps(c,1))}));
+%     pat = fcomp.mIC{:,groups(comps(c,2))}(isfinite(fcomp.mIC{:,groups(comps(c,2))}));
+%     [sig.fcomp.meanIC.h(c,1), sig.fcomp.meanIC.p(c,1), sig.fcomp.meanIC.effsize(c,1)] = kstest2(con, pat);
+%     [sig.fcomp.meanIC.p(c,2), ~, sig.fcomp.meanIC.effsize(c,2)] = permutationTest(con, pat, 10000, 'sidedness','both');
+%     if sig.fcomp.meanIC.p(c,2) < pval.target
+%         sig.fcomp.meanIC.h(c,2) = 1;
+%     else
+%         sig.fcomp.meanIC.h(c,2) = 0;
+%     end
+% end
+% 
+% % Run mutiple-comparison correction
+% if N.comp > 1
+%     for t = 1:numel(ttypes)
+%         
+%         % BOLD activations
+%         p_dum = reshape(squeeze(sig.BOLD.p(:,:,t)), [N.comp*N.ROI, 1]);     % reshape p-value array)
+%         [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
+%         sig.BOLD.FDR(:,:,t) = reshape(f, [N.ROI, N.comp]);
+%         sig.BOLD.Sidak(:,:,t) = reshape(S, [N.ROI, N.comp]);
+%         
+%         % dFC activations
+%         p_dum = reshape(squeeze(sig.dFC.p(:,:,t)), [N.comp*N.ROI, 1]);      % reshape p-value array)
+%         [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
+%         sig.dFC.FDR(:,:,t) = reshape(f, [N.ROI, N.comp]);
+%         sig.dFC.Sidak(:,:,t) = reshape(S, [N.ROI, N.comp]);
+%         
+%         % dFC activations
+%         p_dum = reshape(squeeze(sig.IC.p(:,:,t)), [N.comp*N.IC, 1]);	% reshape p-value array)
+%         [f, ~, S] = mCompCorr([], p_dum, pval.target);                  % run mutliple comparison tests
+%         sig.IC.FDR(:,:,t) = reshape(f, [N.IC, N.comp]);
+%         sig.IC.Sidak(:,:,t) = reshape(S, [N.IC, N.comp]);
+%         
+%         % BOLD functional complexity
+%         p_dum = reshape(squeeze(sig.fcomp.BOLD.p(:,:,t)), [N.comp*N.ROI, 1]);	% reshape p-value array)
+%         [f, ~, S] = mCompCorr([], p_dum, pval.target);                          % run mutliple comparison tests
+%         sig.fcomp.BOLD.FDR(:,:,t) = reshape(f, [N.ROI, N.comp]);
+%         sig.fcomp.BOLD.Sidak(:,:,t) = reshape(S, [N.ROI, N.comp]);
+%         
+%         % Component functional complexity
+%         p_dum = reshape(squeeze(sig.fcomp.IC.p(:,:,t)), [N.comp*N.IC, 1]);	% reshape p-value array)
+%         [f, ~, S] = mCompCorr([], p_dum, pval.target);                      % run mutliple comparison tests
+%         sig.fcomp.IC.FDR(:,:,t) = reshape(f, [N.IC, N.comp]);
+%         sig.fcomp.IC.Sidak(:,:,t) = reshape(S, [N.IC, N.comp]);
+%         
+%         % FCD Activations
+%         [FCD.IC.FDR, FCD.IC.Bonferroni, FCD.IC.Sidak] = mCompCorr([], FCD.IC.p(:,t), pval.target);
+%         [FCD.dFC.FDR, FCD.dFC.Bonferroni, FCD.dFC.Sidak] = mCompCorr([], FCD.dFC.p(:,t), pval.target);
+% 
+%         % Metastability
+%         [sig.metastable.BOLD.FDR, sig.metastable.BOLD.Bonferroni, sig.metastable.BOLD.Sidak] = mCompCorr([], sig.metastable.BOLD.p(:,t), pval.target);
+%         [sig.metastable.dFC.FDR, sig.metastable.dFC.Bonferroni, sig.metastable.dFC.Sidak] = mCompCorr([], sig.metastable.dFC.p(:,t), pval.target);
+%         [sig.metastable.IC.FDR, sig.metastable.IC.Bonferroni, sig.metastable.IC.Sidak] = mCompCorr([], sig.metastable.IC.p(:,t), pval.target);
+% 
+%         % Mean Complexities
+%         [sig.fcomp.meansubj.FDR, sig.fcomp.meansubj.Bonferroni, sig.fcomp.meansubj.Sidak] = mCompCorr([], sig.fcomp.meansubj.p(:,t), pval.target);
+%         [sig.fcomp.meanIC.FDR, sig.fcomp.meanIC.Bonferroni, sig.fcomp.meanIC.Sidak] = mCompCorr([], sig.fcomp.meanIC.p(:,t), pval.target);
+%     end
+% end
+% clear con pat t c pdum f S c
 
 
 %% Visualize FCD Distributions

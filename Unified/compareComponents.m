@@ -1,51 +1,6 @@
-%% Import data
-
-clear; close all; clc;
-
-% Find general path (enclosing folder of current directory)
-path{1} = strsplit(pwd, '/');
-path{2,1} = strjoin(path{1}(1:end-2),'/');
-path{3,1} = strjoin(path{1}(1:end-1),'/');
-path{1,1} = strjoin(path{1}(1:end-3),'/');
-
-% Set required subdirectories
-path{4,1} = fullfile(path{2}, 'UCLA', 'Results','LEICA');
-path{5,1} = fullfile(path{1}, 'Project','Atlases','AAL');
-
-% Add relevant paths
-fpath{1,1} = fullfile(path{1},'MATLAB','BrainNetViewer');
-fpath{2,1} = fullfile(path{1},'MATLAB','permutationTest');
-fpath{3,1} = fullfile(path{1},'Project','Functions');
-fpath{4,1} = fullfile(path{1},'Project','LEICA','Functions');
-for k = 1:numel(fpath)
-	addpath(genpath(fpath{k}));
-end
-clear fpath k
-addpath(fullfile(path{1},'MATLAB','spm12'));
-
-% Determine whether to z-scale membership weights
-z.thresh = 1:0.2:1.6;
-zscale = false;
-
-% set color index for histograms, cortex network plots
-cind.hist = [0 0 0; 0 0 1; 1 0 0; 0 1 0];
-cind.node = [1 0 0; 0 0 1];
-cind.conn = [1 0 0; 0 0 1];
-
-% Choose file to analyze
-fname = "GMR/Control_ICs/LE_COS_ICA_All_wideband_k1_Iteration1";
-
-% Set decompositions, spaces, comparisions
-nFig = 1;
-spaces = {'dFC' 'IC'};					% space in which to compare
-dim = {'Subject', 'Component'};			% dimensions to compare
-ttypes = {'kstest2', 'permutation'};	% set test types to run
-pTarget = 0.05;							% target p-value
-prange = 0.025:0.025:0.1;				% Set range of p-values to test
-
-% Load entropies
-load(fullfile(path{4}, fname), 'origin','cortex','MNIscale','sphereScale','rdux', 'labels_ROI','coords_ROI','entro','N','memberships','I','T','ROI','comps');
-labels = I.Properties.VariableNames;
+function [F, labels, h, p, tstat, FDR, Sidak] = compareComponents(path, z, cind, spaces, dim, ttypes, pTarget, prange, origin,cortex,sphereScale,rdux, ROI,entro,N,memberships,labels,comps)
+%  Summary of this function goes here
+%	
 
 % Reindex count array
 nc = N.IC;
@@ -54,7 +9,11 @@ N.IC{strcmpi(spaces, 'dFC')} = N.ROI;
 N.IC{strcmpi(spaces, 'IC')} = nc; clear nc
 
 % file containing cortical atlas
-cortex.file = fullfile(path{5}, cortex.file);
+cortex.file = fullfile(path{7}, cortex.file);
+
+% Extract ROI information
+labels_ROI = ROI.Properties.RowNames;
+coords_ROI = ROI{:,{'x','y','z'}};
 
 
 %% Compare mean entropy across methods
@@ -506,8 +465,5 @@ clear K k kFig kax z
 
 
 
-%% Save results
 
-savefig(F, fullfile(path{4}, strcat(fname, '_entroCompare')), 'compact');
-clear F nFig
-save(fullfile(path{4}, strcat(fname, '_entroCompare')));
+end
