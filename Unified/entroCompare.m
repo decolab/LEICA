@@ -33,7 +33,7 @@ cind.node = [1 0 0; 0 0 1];
 cind.conn = [1 0 0; 0 0 1];
 
 % Choose file to analyze
-fname = "GMR/Control_ICs/LE_COS_ICA_All_wideband_k1_Iteration1";
+fname = "GMR/Common_ICs/LE_COS_ICA_All_wideband_k1_Iteration2";
 
 % Set decompositions, spaces, comparisions
 nFig = 1;
@@ -112,115 +112,61 @@ end
 clear c
 
 % Display mean entropy histograms
-F(nFig) = figure('Position', [0 0 1280 1024]); nFig = nFig + 1; hold on;
-col = 0;
 for d = 1:numel(dim)			% dimension average to display
+    F(nFig) = figure('Position', [0 0 1280 1024]); nFig = nFig + 1; hold on;
+    col = 0;
+    
 	for s = 1:numel(spaces)		% space to display (dFC or IC)
 		col = col+1;
 
-        % Get bin sizes
-        sz = binWidth(mEntro{s,d}{:,:}, 2);
-
         % Plot mean entropy histograms
-        if N.comp > 1
-            nc = numel(spaces)*(ndims(entro.(spaces{s}))-1);
-            for c = 1:N.comp
-                row = nc*(c-1);
-                subplot(N.comp, nc, col+row); hold on;
-                for f = comps(c,:)
-                    l = mEntro{s,d}{:,labels{f}};
-                    l = l(isfinite(l));
-                    h{c,f} = histogram(l, 'BinWidth',sz, 'Normalization','probability', 'FaceAlpha',0.4, 'FaceColor',cind.hist(f,:));
-                end
-                means(comps(c,:), h(c,:), sig.av.h(s,d,c,:));     % Plot means, distances for significant differences
+        sz = binWidth(mEntro{s,d}{:,:}, 2);                 % Get bin sizes
+        for c = 1:N.comp
+            row = numel(spaces)*(c-1);
+            subplot(N.comp, numel(spaces), col+row); hold on;
+            for f = comps(c,:)
+                l = mEntro{s,d}{:,labels{f}};
+                l = l(isfinite(l));
+                h{c,f} = histogram(l, 'BinWidth',sz, 'Normalization','probability', 'FaceAlpha',0.4, 'FaceColor',cind.hist(f,:));
             end
-        else
-            nc = numel(spaces)*(ndims(entro.(spaces{s}))-1);
-            for c = 1:N.comp
-                row = nc*(t-1);
-                subplot(N.comp, nc, col+row); hold on;
-                for f = comps(c,:)
-                    l = mEntro{s,d}{:,labels{f}};
-                    l = l(isfinite(l));
-                    h{c,f} = histogram(l, 'BinWidth',sz, 'Normalization','probability', 'FaceAlpha',0.4, 'FaceColor',cind.hist(f,:));
-                end
-                means(comps(c,:), h(c,:), sig.av.h(s,d,c,:));     % Plot means, distances for significant differences
-            end
-            title([dim(d), 'Mean, ', spaces(s), ' Space']);
-            sgtitle(strjoin(labels(comps), ' vs. '));
-            legend(labels(comps), 'location','northwest');
+            means(comps(c,:), h(c,:), sig.av.h(s,d,c,:));     % Plot means, distances for significant differences
+            title(strjoin(["Mean Entropy per", dim(d), "in" spaces(s), "Space"]));
+            subtitle(strjoin([labels(comps(c,1)) "v." labels(comps(c,2))]));
             xlabel('Mean Entropy'); ylabel('Probability');
         end
 	end
 end
-clear d s nc col row mc mp i h hg sz l
 
-
-%% Overall Entropy
-
-% Visualize overall entropy distribution between groups
+% Display mean entropy boxplots
 F(nFig) = figure('Position', [0 0 1280 1024]); nFig = nFig + 1; hold on;
-title('Entropy per Condition');
-n = 0;
-for s = 1:numel(spaces)
+col = 0;
+for d = 1:numel(dim)			% dimension average to display
+	for s = 1:numel(spaces)		% space to display (dFC or IC)
+        col = col+1;
+        b(d,s) = subplot(numel(dim), numel(spaces), col);
+        a = table2array(mEntro{s,d});
+        l = reshape(repmat(string(labels), [size(a,1) 1]), [numel(a) 1]);
+        a = reshape(a, [numel(a) 1]);
+        i = isfinite(a);
+        a = a(i); l = l(i);
+        boxplot(a, l, 'Colors',cind.hist, 'Notch','on'); hold on
+        title(strjoin(["Mean Entropy per", dim(d), "in" spaces(s), "Space"]));
+        xt = get(b(d,s), 'XTick');
+        yt = get(b(d,s), 'YTick');
+        yl = ylim(b(d,s));
+        amp = [1.02 1.03 1.07];
         
-        % Reshape entropy
-        d = nan(numel(entro.(spaces(s))(:,:,1)), N.conditions);
-        for c = 1:N.conditions
-            d(:,c) = reshape(entro.(spaces(s))(:,:,c), [numel(entro.(spaces(s))(:,:,c)), 1]);
-        end
-        
-        % Run comparisons
-        a = nan(N.comp, 2);
-        sg = nan(N.comp, 2);
-        for c = 1:N.comp
-    		[sg(c,1), a(c,1), ~] = kstest2(d(:,comps(c,1)), d(:,comps(c,2)));
-        	[a(c,2), ~, ~] = permutationTest(d(:,comps(c,1)), d(:,comps(c,2)), 10000, 'sidedness','both');
-            sg(c,2) = a(c,2) < pTarget;
-        end
-            
-        % Get bin sizes
-        d = reshape(entro.(spaces(s)), [N.IC{s}*max(N.subjects) N.conditions]);
-        sz = binWidth(d, 2);
-        
-		% Plot all histograms
-		n = n+1;
-		ax(n) = subplot(size(comps,1), numel(spaces), n); hold on;
-        f = unique(comps);
-        for c = 1:N.conditions
-            d = entro.(spaces(s))(:,:,f(c));
-            d = d(isfinite(d));
-            h{c} = histogram(d, 'BinWidth',sz, 'Normalization','probability', 'FaceColor',cind.hist(f(c),:));
-        end
-        legend(ax(n), labels(unique(comps)), 'location','northwest');
-        
-        % Plot comparisions
-        if N.comp > 1
-            % Run mutliple-comparison corrections for conditions
-            [FDR(:,1), Bonferroni(:,1), Sidak(:,1)] = mCompCorr([], a(:,1), pTarget);
-            [FDR(:,2), Bonferroni(:,2), Sidak(:,2)] = mCompCorr([], a(:,2), pTarget);
-            
-            % Plot histograms, means
-            for c = size(comps,1)
-                n = n+1;
-                ax(n) = subplot((1+size(comps,1)), numel(spaces), n); hold on;
-                for f = comps(c,:)
-                    d = entro.(spaces(s))(:,:,f);
-                    d = d(isfinite(d));
-                    h{c,f} = histogram(d, 'BinWidth',sz, 'Normalization','probability', 'FaceColor',cind.hist(f,:));
-                end
-                means(comps(c,:), h(c,:), FDR(c,:));     % Plot means, distances for significant differences
-                legend(ax(n), labels(unique(comps(c,:))), 'location','northwest');
+        for c = 1:size(comps,1)
+            if sig.av.FDR(s,d,c,:)
+                plot(xt(comps(c,:)), [1 1]*max(yt)*amp(1), '-k',  mean(xt(comps(c,:))), max(yt)*amp(2), '*k');
+                l = [yl(1) yl(2)*amp(3)];
+                ylim(b(d,s), l);
+                amp = amp+0.03;
             end
-        else
-            means(comps, h(:,:), sg(:,:));     % Plot means, distances for significant differences
-            legend(ax(n), labels(unique(comps)), 'location','northwest');
         end
-        
-		title(['Entropy in ' spaces(s) ' Space']);
-		ylabel('Probability'); xlabel('Entropy');
+	end
 end
-clear s t h p a mc mp i n hg sz d c f sg
+clear d s a nc col row mc mp i h hg sz l c f p b yt xt yl amp
 
 
 %% Compare component-level entropy between conditions
@@ -316,7 +262,7 @@ for c = 1:N.comp
                 xticks(ax(4), 1:numel(prange));
                 xticklabels(ax(4), strsplit(num2str(prange))); hold on;
                 xlabel('FDR Significant'); ylabel('Component');
-                title([ttypes(t), ', ', spaces(s), ' space']);
+                title(strjoin([ttypes(t), "test in", spaces(s), "space"]));
 
                 % Plot Sidak significance level
                 figure(F(nFig-1));
@@ -328,7 +274,7 @@ for c = 1:N.comp
                 xticks(ax(3), 1:numel(prange));
                 xticklabels(ax(3), strsplit(num2str(prange))); hold on;
                 xlabel('Sidak Significant'); ylabel('Component');
-                title([ttypes(t), ', ', spaces(s), ' space']);    % , labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
+                title(strjoin([ttypes(t), "test in", spaces(s), "space"]));    % , labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
             end
 
             % Display test p-values
@@ -338,7 +284,7 @@ for c = 1:N.comp
             n(2) = n(2)+1;
             barh(ax(2), p{s}(:,t,c)); hold on;
             plot((max(p{s}(:,t,c),[],'all')*1.2).*ones(numel(h{s,t,c}),1), h{s,t,c}, '*r');
-            title([ttypes(t), ', ', spaces(s), ' space']);    % , labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
+            title(strjoin([ttypes(t), "test in", spaces(s), "space"]));    % , labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
             ylabel('Component'); xlabel('p-value');
 
             % Display test effect sizes
@@ -348,7 +294,7 @@ for c = 1:N.comp
             n(1) = n(1)+1;
             barh(ax(1), tstat{s}(:,t,c)); hold on;
             plot(sign(tstat{s}(h{s,t,c},t,c)).*(max(abs(tstat{s}(:,t,c)),[],'all')*1.2).*ones(numel(h{s,t,c}),1), h{s,t,c}, '*r');
-            title([ttypes(t), ', ', spaces(s), ' space']);    %, labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
+            title(strjoin([ttypes(t), "test in", spaces(s), "space"]));    %, labels{comps(c,1)}, ' vs. ', labels{comps(c,2)}]);
             ylabel('Component'); xlabel('Effect Size');
         end
 
@@ -377,7 +323,7 @@ for c = 1:N.comp
 
                     % Plot component
                     if sum(z.thresh ~= 0, 'all') > 0
-                        for z = 1:numel(z.thresh)
+                        for i = 1:numel(z.thresh)
                             K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
 
                             % Connectivity
@@ -402,26 +348,26 @@ for c = 1:N.comp
 
                             % Bar Plots
                             kax = subplot(2, 5, [1 6]); hold on;    % subplot(numel(h{e,s,t,c})*2, 5, [1 6]); hold on;
-                            ind(:,1) = mships < -z.thresh(z);	% select node weights which surpass threshold
-                            ind(:,2) = mships > z.thresh(z); 	% select node weights which surpass threshold
-                            ind(:,3) = mships > -z.thresh(z) & mships < 0;
-                            ind(:,4) = mships < z.thresh(z) & mships > 0;
+                            ind(:,1) = mships < -z.thresh(i);	% select node weights which surpass threshold
+                            ind(:,2) = mships > z.thresh(i); 	% select node weights which surpass threshold
+                            ind(:,3) = mships > -z.thresh(i) & mships < 0;
+                            ind(:,4) = mships < z.thresh(i) & mships > 0;
                             a = mships; a(~ind(:,1)) = 0; barh(1:N.ROI, a, 'b');
                             a = mships; a(~ind(:,2)) = 0; barh(1:N.ROI, a, 'r');
                             a = mships; a(~ind(:,3)) = 0; barh(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
                             a = mships; a(~ind(:,4)) = 0; barh(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
                             yticks(1:N.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
                             title("Component Membership", 'FontSize',16);                           % , 'Position',[0 93]);
-                            subtitle(['z-score threshold: ' num2str(z.thresh(z))], 'FontSize',12);   % , 'Position',[0 91]);
+                            subtitle(['z-score threshold: ' num2str(z.thresh(i))], 'FontSize',12);   % , 'Position',[0 91]);
                             xlabel('z-score', 'FontSize',12);
 
                             % Brain Renderings
                             kax = subplot(2, 5, [2 3 7 8]); hold on;  % subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                            plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, z.thresh(z), [], cind, [], [], rdux);
+                            plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, z.thresh(i), [], cind, [], [], rdux);
                             % Note: if want to weight node color by strength of association, must encode weighting in cind.node
 
                             % Save as png file
-                            saveas(K(kFig-1), fullfile(path{4}, strjoin([fname, strcat(labels(comps(c,1)),'v',labels(comps(c,2))), strjoin(["Z", strjoin(split(num2str(z.thresh(z)), '.'),'')], '')], '_')), 'png');
+                            saveas(K(kFig-1), fullfile(path{4}, strjoin([fname, strcat(labels(comps(c,1)),'v',labels(comps(c,2))), strjoin(['Component',num2str(k(j))]), strjoin(["Z", strjoin(split(num2str(z.thresh(i)), '.'),'')], '')], '_')), 'png');
                         end
                     else
                         K(kFig) = figure('Position', [0 0 1280 1024]); kFig = kFig + 1; hold on;
@@ -458,15 +404,15 @@ for c = 1:N.comp
                         end
                         yticks(1:N.ROI); set(kax, 'YTickLabel',labels_ROI, 'FontSize', 6);
                         title("Component Membership", 'FontSize',16, 'Position',[0 93]);
-                        subtitle(['z-score threshold: ' num2str(z.thresh(z))], 'FontSize',12, 'Position',[0 91]);
+                        subtitle(['z-score threshold: ' num2str(z.thresh)], 'FontSize',12, 'Position',[0 91]);
                         xlabel('z-score', 'FontSize',12);
 
                         % Brain Renderings
                         kax = subplot(2, 5, [2 3 7 8]); hold on;	% subplot(numel(h{e,s,t,c})*2, 5, [2 3 7 8]); hold on;
-                        plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, z.thresh(z), [], cind, [], [], rdux);
+                        plot_nodes_in_cortex(cortex, mships, coords_ROI, origin, sphereScale, z.thresh, [], cind, [], [], rdux);
                         
                         % Save as png file
-                        saveas(K(kFig-1), fullfile(path{4}, strjoin([fname, strcat(labels(comps(c,1)),'v',labels(comps(c,2))), strjoin(['Z', split(num2str(z.thresh(z)), '.')], '')], '_')), 'png');
+                        saveas(K(kFig-1), fullfile(path{4}, strjoin([fname, strcat(labels(comps(c,1)),'v',labels(comps(c,2))), strjoin(['Component',num2str(k(j))]), strjoin(['Z', split(num2str(z.thresh(i)), '.')], '')], '_')), 'png');
                     end
                 else
                     % Histogram of component entropies
@@ -477,7 +423,7 @@ for c = 1:N.comp
                         histogram(en, 'BinWidth',sz, 'Normalization','probability');
                     end
                     legend(labels(comps(c,:)));
-                    title(strjoin({'Entropy of', char(labels_ROI(k(j))), 'in', spaces(s), 'Space'}));
+                    title(strjoin(["Entropy of", labels_ROI(k(j)), "in", spaces(s), "Space"]));
                     ylabel('Probability'); xlabel('Entropy');
 
                     % Save as png file
@@ -487,7 +433,7 @@ for c = 1:N.comp
         end
     end
 end
-clear e s t q B n ax n k j a hg f mships m ind w d sz c p_dum en
+clear e s t q B n ax n k j a hg f mships m ind w d sz c p_dum en i
 
 % Add kFigs to F
 if N.comp > 1
