@@ -50,6 +50,7 @@ clear fpath k
 
 % Load formatted data
 load(fullfile(path{5}, 'formattedOCD.mat'));
+cortex.file = fullfile(path{7}, cortex.file);
 
 % Set figure counter
 N.fig = 1;
@@ -154,7 +155,8 @@ end
 % Name: pairwise or all-way comparisons?
 if N.comp == 1
     fileName = strsplit(fileName, '/');
-    fileName = fullfile(fileName{1}, 'Pairwise', strcat(strjoin(fileName(2:end),'/'), '_', groups(comps(1)), 'v', groups(comps(2))));
+    fileName = fullfile(fileName{1}, strcat(strjoin(fileName(2:end),'/'), '_', groups(comps(1)), 'v', groups(comps(2))));
+%     fileName = fullfile(fileName{1}, 'Pairwise', strcat(strjoin(fileName(2:end),'/'), '_', groups(comps(1)), 'v', groups(comps(2))));
 else
     fileName = strjoin([fileName; "All"], '_');
 end
@@ -201,7 +203,6 @@ clear fnq flp fhi Wn k fType
 %% Compute dFC, FCD
 
 % Preallocate storage arrays
-PH = cell(max(N.subjects), N.conditions);
 dFC.subj = cell(max(N.subjects), N.conditions);
 T.index = nan(2, sum(N.subjects)*T.scan);
 t = zeros(2,1);
@@ -211,7 +212,7 @@ disp('Computing subject-level dFC');
 dFC.cond = cell(1, N.conditions);
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
-		[PH{s,c}, dFC.subj{s,c}] = phasesync(BOLD{s,c}, N.ROI, T.scan, bfilt, afilt, aType);
+		[~, dFC.subj{s,c}] = phasesync(BOLD{s,c}, N.ROI, T.scan, bfilt, afilt, aType);
 		t(1) = t(2) + 1;
 		t(2) = t(1)-1 + size(dFC.subj{s,c}, 2);
 		T.index(:, t(1):t(2)) = repmat([s,c]', [1, size(dFC.subj{s,c},2)]);
@@ -225,23 +226,6 @@ else
 end
 clear t s c afilt bfilt sc90
 
-% Plot BOLD signals
-F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(2,2,1); imagesc(cell2mat(BOLD(:,1)')); colorbar; title('Patient BOLD');
-subplot(2,2,2); imagesc(cell2mat(BOLD(:,2)')); colorbar; title('Control BOLD');
-subplot(2,2,[3 4]); hold on; legend('Patient', 'Control');
-histogram(cell2mat(BOLD(:,1)'), 'Normalization','pdf');
-histogram(cell2mat(BOLD(:,2)'), 'Normalization','pdf');
-
-% Plot dFC signals
-F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(2,2,1); imagesc(dFC.cond{1}); colorbar; title('Patient LEdFC');
-subplot(2,2,2); imagesc(dFC.cond{2}); colorbar; title('Control LEdFC');
-subplot(2,2,[3 4]); hold on;
-histogram(dFC.cond{1}, 'Normalization','pdf');
-histogram(dFC.cond{2}, 'Normalization','pdf');
-legend('Patient', 'Control');
-
 % Compute FCD, power spectra of dFC
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
@@ -249,6 +233,29 @@ for c = 1:N.conditions
 		% pspect.dFC.subj{s,c} = pspectrum(dFC.subj{s,c}', 1/T.TR)';
 	end
 end
+
+
+%% Visualize BOLD, dFC signals
+
+% Plot BOLD signals
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
+ax = subplot(N.conditions+1 ,1, N.conditions+1); hold on;
+for g = 1:N.conditions
+    subplot(N.conditions+1 ,1, g); imagesc(cell2mat(BOLD(:,1)')); colorbar; title(groups{g}); xlabel('Time (s)'); ylabel('ROI');
+    histogram(ax, cell2mat(BOLD(:,g)'), 'Normalization','pdf');
+end
+legend(ax, groups);
+sgtitle('BOLD');
+
+% Plot dFC signals
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
+ax = subplot(N.conditions+1 ,1, N.conditions+1); hold on;
+for g = 1:N.conditions
+    subplot(N.conditions+1 ,1, g); imagesc(dFC.cond{g}); colorbar; title(groups{g}); xlabel('Time (s)'); ylabel('ROI');
+    histogram(ax, dFC.cond{g}, 'Normalization','pdf');
+end
+legend(ax, groups);
+sgtitle('LEdFC');
 
 
 %% Compute ICs from dFC
@@ -365,15 +372,6 @@ if strcmpi(aType.compress, 'LEICA') || strcmpi(aType.compress, 'eigenvector') ||
 end
 clear i
 
-% Visualize IC activations
-F(N.fig) = figure; hold on; N.fig = N.fig+1;
-subplot(2,3, [1 2]); imagesc(cell2mat(activities.subj(1:N.subjects(1),1)')); colorbar; title('Patient LEICA Activations');
-subplot(2,3, [4 5]); imagesc(cell2mat(activities.subj(1:N.subjects(2),2)')); colorbar; title('Control LEICA Activations');
-subplot(2,3, [3 6]); hold on;
-histogram(cell2mat(activities.subj(1:N.subjects(1),1)), 'Normalization','pdf');
-histogram(cell2mat(activities.subj(1:N.subjects(2),2)), 'Normalization','pdf');
-legend({'Patient', 'Control'});
-
 % Compute FCD of subject-level ICs
 for c = 1:N.conditions
 	for s = 1:N.subjects(c)
@@ -401,12 +399,27 @@ else
 end
 d = d./max(abs(d), [], 'all', 'omitnan');
 rho = corrcoef(mean(d, 3), mean(FC, [3 4], 'omitnan'));
+
+
+%% Visualize IC activations & relation to FC
+
+% Visualize IC activations
+F(N.fig) = figure; hold on; N.fig = N.fig+1;
+ax = subplot(N.conditions+1 ,1, N.conditions+1); hold on;
+for g = 1:N.conditions
+    subplot(N.conditions+1 ,1, g); imagesc(cell2mat(activities.subj(1:N.subjects(g),g)')); colorbar; title(groups{g}); xlabel('Time (s)'); ylabel('ROI');
+    histogram(ax, cell2mat(activities.subj(1:N.subjects(g),g)), 'Normalization','pdf');
+end
+legend(ax, groups);
+sgtitle('LEICA Activations');
+clear g
+
+% Visualize weighted average vs. static FC
 F(N.fig) = figure; hold on; N.fig = N.fig+1; colormap jet
 subplot(1,2, 2); imagesc(mean(FC, [3 4], 'omitnan')); colorbar; title('Static FC');  xticks([]); yticks([]);
 subplot(1,2, 1); imagesc(mean(d,3)); colorbar;
-title('Weighted Motif Average'); yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
+title('Weighted Motif Average'); yticks(1:N.ROI); yticklabels(ROI{:,"Label"}); xticks([]);
 clear c d i m
-
 
 
 %% Compute global metrics (entropy, metastability)
@@ -457,10 +470,6 @@ entro.mIC = array2table(entro.mIC, 'VariableNames', groups);
 fcomp.subj = array2table(fcomp.subj, 'VariableNames', groups);
 fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', groups);
 
-% Run comparison with entropy
-[F, h, p, tstat, FDR, Sidak] = compareComponents(path, z, cind, spaces, dim, ttypes, pTarget, prange, origin, cortex, sphereScale, rdux, ROI, entro, N, memberships, I.Properties.VariableNames, comps);
-
-
 
 %% Visualize FCD Distributions
 
@@ -470,9 +479,12 @@ ax(2,1) = subplot(2, N.conditions, N.conditions+1:2*N.conditions); hold on;
 for c = 1:N.conditions
     histogram(ax(2,1), cell2mat(FCD.dFC.subj(1:N.subjects(c),c)), 'Normalization','pdf');	% FCD histograms
     ax(1,c) = subplot(2, N.conditions, c); colormap jet             % FCD matrix
-    imagesc(ax(1,c), FCD.dFC.subj{1,c}); colorbar; title(["dFC FCD of ", groups(c), num2str(1)]);
+    imagesc(ax(1,c), FCD.dFC.subj{1,c}); colorbar; title(strjoin(["dFC FCD of", groups(c), num2str(1)])); ylabel("Time (s)"); xlabel("Time (s)");  pbaspect([1 1 1]);
 end
 legend(ax(2,1), groups);  % FCD histogram legend
+ylabel(ax(2,1), "Count");
+xlabel(ax(2,1), "Correlation");
+title(ax(2,1), "FCD Scores");
 clear ax c
 
 % Visualize IC FCD
@@ -481,9 +493,12 @@ ax(2,1) = subplot(2, N.conditions, N.conditions+1:2*N.conditions); hold on;
 for c = 1:N.conditions
     histogram(ax(2,1), cell2mat(FCD.IC.subj(1:N.subjects(c),c)), 'Normalization','pdf');	% FCD histograms
     ax(1,c) = subplot(2, N.conditions, c); colormap jet             % FCD matrix
-    imagesc(ax(1,c), FCD.IC.subj{1,c}); colorbar; title(["IC FCD of ", groups(c), num2str(1)]);
+    imagesc(ax(1,c), FCD.IC.subj{1,c}); colorbar; title(strjoin(["IC FCD of", groups(c), num2str(1)])); ylabel("Time (s)"); xlabel("Time (s)"); pbaspect([1 1 1]);
 end
 legend(ax(2,1), groups);  % FCD histogram legend
+ylabel(ax(2,1), "Count");
+xlabel(ax(2,1), "Correlation");
+title(ax(2,1), "FCD Scores");
 clear ax c
 
 
@@ -512,73 +527,32 @@ legend(ax(2), groups);
 
 
 %% Visualize IC memberships
-if strcmpi(aType.compress, 'none')
-	for j = 1:N.IC
 
-		% Get bin sizes
-		f = figure; hold on;
-		hg{1} = histogram(entro.IC(j,:,1));
-		hg{2} = histogram(entro.IC(j,:,2));
-		sz = min(hg{1}.BinWidth, hg{2}.BinWidth);
-		close(f);
-
-		% Scale memberships (optional)
-		mships = zscore(memberships(:,j));
-
-		% Open figure
-		F(nFig) = figure; nFig = nFig + 1; hold on;
-
-		% Connectivity
-		kax = subplot(2, 4, [3 4]); hold on;
-		sgtitle(['Component ', num2str(j)]);
-		a = squeeze(memberships(:,j))*squeeze(memberships(:,j))';
-		imagesc(a); colorbar; hold on;
-		xlim([1 size(a,2)]); ylim([1 size(a,1)]);
-		title('Connectivity');
-		yticks(1:N.ROI); yticklabels(labels_ROI); xticks([]);
-		pbaspect([1 1 1]);
-
-		% Histogram of component entropies
-		kax = subplot(2, 4, [1 2]); hold on;
-		histogram(entro.IC(j,:,1), 'BinWidth',sz, 'Normalization','pdf');
-		histogram(entro.IC(j,:,2), 'BinWidth',sz, 'Normalization','pdf');
-		legend(labels.Properties.VariableNames);
-		title('Entropy');
-		ylabel('Counts'); xlabel('Mean Entropy');
-
-		% Bar Plots
-		kax = subplot(2, 4, [5 8]); hold on;
-		if sum(sign(squeeze(memberships(:,j)))) >= 0
-			ind(:,1) = mships < -zthresh;	% select node weights which surpass threshold
-			ind(:,2) = mships > zthresh;	% select node weights which surpass threshold
-			ind(:,3) = mships > -zthresh & mships < 0;
-			ind(:,4) = mships < zthresh & mships > 0;
-			a = mships; a(~ind(:,1)) = 0; bar(1:N.ROI, a, 'b');
-			a = mships; a(~ind(:,2)) = 0; bar(1:N.ROI, a, 'r');
-			a = mships; a(~ind(:,3)) = 0; bar(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
-			a = mships; a(~ind(:,4)) = 0; bar(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
-		elseif sum(sign(squeeze(memberships(:,j)))) < 0
-			ind(:,1) = mships > zthresh;	% only plot node weights which surpass threshold
-			ind(:,2) = mships < -zthresh;	% only plot node weights which surpass threshold
-			ind(:,3) = mships < zthresh & mships > 0;
-			ind(:,4) = mships > -zthresh & mships < 0;
-			a = mships; a(~ind(:,1)) = 0; bar(1:N.ROI, a, 'b');
-			a = mships; a(~ind(:,2)) = 0; bar(1:N.ROI, a, 'r');
-			a = mships; a(~ind(:,3)) = 0; bar(1:N.ROI, a, 'b', 'FaceAlpha',0.3);
-			a = mships; a(~ind(:,4)) = 0; bar(1:N.ROI, a, 'r', 'FaceAlpha',0.3);
-		end
-		title(['z-score threshold: ' num2str(zthresh)]);
-		xticks(1:N.ROI); xticklabels(labels_ROI); xtickangle(-90);
-		xlabel('z-score');
-	end
+if ~strcmpi(aType.compress, 'none')
+    
+    % Scale memberships (optional)
+    if z.scale == true || sum(z.thresh ~= 0, 'all') > 0
+        mships = squeeze(zscore(memberships));
+    else
+        mships = squeeze(memberships);
+    end
+    
+    % Plot components
+    fDims = [0 0 1280 1024];
+    F(N.fig:N.fig+1) = plotComponents(mships, z.thresh(1), ROI, cortex, origin, cind, N, fDims);
+    N.fig = N.fig+2;
 end
-clear mships j hg sz f ind a c
+clear mships fDims
 
 
 %% Compare component metrics
 
 % Entropy
-[F, h, p, tstat, FDR, Sidak] = compareComponents(path,z,cind, spaces,dim,ttypes,pTarget,prange, origin,cortex,sphereScale,rdux, ROI,entro,N,memberships,labels,comps);
+for s = 1:numel(spaces)
+    [K, h, p, tstat, FDR, Sidak] = compareComponents(z, cind, dim, ttypes, pTarget, prange, origin,cortex,ROI, entro.(spaces(s)), N, memberships, groups, comps);
+    F(numel(F)+1:numel(F)+numel(K)) = K;
+end
+clear K
 
 
 %% Save results
@@ -586,7 +560,7 @@ clear mships j hg sz f ind a c
 % Save figures
 if exist('F', 'var')
 	savefig(F, fullfile(path{6}, fileName), 'compact');
-	clear F
+	clear F ax
 end
 
 % Save all data

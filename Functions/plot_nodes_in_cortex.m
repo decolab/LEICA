@@ -1,4 +1,4 @@
-function plot_nodes_in_cortex (cortex, V, coord, ori, a, thresh, map, cind, lgnd, str, redux)
+function plot_nodes_in_cortex (cortex, V, coord, ori, thresh, map, cind, lgnd, str)
 %   PLOT_NODES_IN_CORTEX represents the network of interest in cortical
 % space.
 % INPUTS
@@ -35,15 +35,15 @@ end
 cortex.pial = mapPial(cortex.file);
 sregion = smooth3(cortex.pial);
 psregion = patch(isosurface(sregion,cortex.val,'verbose'), 'FaceColor', cortex.color, 'EdgeColor', 'none');
-reducepatch(psregion,redux,'verbose');
+reducepatch(psregion, cortex.redux, 'verbose');
 isonormals(sregion,psregion);
 set(psregion,'FaceAlpha', cortex.transparency);			%transparency
 
 % PLOT NODES
 [x,y,z] = sphere;
-x = a*x;
-y = a*y;
-z = a*z;
+x = cortex.scale*x;
+y = cortex.scale*y;
+z = cortex.scale*z;
 
 % Find which nodes have significant changes in in-strength and out-strength
 [r, c] = find(str{:,:});
