@@ -26,7 +26,7 @@ path{3,1} = strjoin(path{1}(1:end-1),'/');
 path{1,1} = strjoin(path{1}(1:end-3),'/');
 
 % Set data-specific subdirectories
-path{4,1} = fullfile(path{2}, 'OCD');
+path{4,1} = fullfile(path{2}, 'UCLA');
 path{5,1} = fullfile(path{4}, 'Data');
 path{6,1} = fullfile(path{4}, 'Results', 'LEICA');
 path{7,1} = fullfile(path{1}, 'Project','Atlases','AAL');
@@ -49,8 +49,13 @@ clear fpath k
 %% Load data
 
 % Load formatted data
-load(fullfile(path{5}, 'formattedOCD.mat'));
+load(fullfile(path{5}, 'formattedUCLA_GMR.mat'));
 cortex.file = fullfile(path{7}, cortex.file);
+
+% Enforce: groups must be row string (necessary for boxplot grouping)
+if iscolumn(groups)
+    groups = groups';
+end
 
 % Set figure counter
 N.fig = 1;
@@ -71,8 +76,8 @@ co = HShannon_kNN_k_initialization(1);
 pval.target = 0.05;
 
 % Set group on which to define componnets
-compGroup = "All";
-% importIC = fullfile(path{6}, 'GroupIC/LE_COS_ICA_ControlIC_ALL_wideband_k1_Iteration1');
+compGroup = "Control";					% note: letter cases must match save directory
+% importIC = fullfile(path{6}, "Common_ICs/LE_COS_ICA_ControlvOCD_wideband_k1_Iteration2");
 
 % Determine how to normalize activity
 normal = 'none';    % options: 'none' (no normalization) or 'probability' (normalize time series as probabilities of activation)
@@ -86,9 +91,6 @@ else
 end
 N.comp = size(comps,1);
 
-% Define test type(s)
-ttypes = ["permutation"];
-
 
 %% Set comparison parameters
 
@@ -101,8 +103,9 @@ cind.hist = [0 0 0; 0 0 1; 1 0 0; 0 1 0];
 cind.node = [1 0 0; 0 0 1];
 cind.conn = [1 0 0; 0 0 1];
 
-% Set decompositions, spaces, comparisions
-spaces = ["IC"];                        % space in which to compare
+% Set tests, decompositions, spaces, comparisions
+ttype = "permutation";
+spaces = "IC";                          % space(s) in which to compare
 dim = ["Subject" "Component"];			% dimensions to compare
 pTarget = 0.05;							% target p-value
 prange = 0.025:0.025:0.075;				% Set range of p-values to test
@@ -343,6 +346,7 @@ meanActivity.concat = mean(activities.concat, 2);
 
 % Sort memberships by activation level
 [meanActivity.concat, i] = sort(meanActivity.concat, 1, 'descend');
+activities.concat = activities.concat(i,:);
 memberships = memberships(:,i);
 clear i
 
@@ -456,19 +460,20 @@ for c = 1:N.conditions
 	end
 end
 clear c s ass roi
-entro.subj = squeeze(mean(entro.IC, 1, 'omitnan'));
-entro.mIC = squeeze(mean(entro.IC, 2, 'omitnan'));
-fcomp.subj = squeeze(mean(fcomp.IC, 1, 'omitnan'));
-fcomp.mIC = squeeze(mean(fcomp.IC, 2, 'omitnan'));
 
-% Convert metrics to table format
+% Find mean values (stored in table format)
 metastable.BOLD = array2table(metastable.BOLD, 'VariableNames', groups);
 metastable.dFC = array2table(metastable.dFC, 'VariableNames', groups);
 metastable.IC = array2table(metastable.IC, 'VariableNames', groups);
-entro.subj = array2table(entro.subj, 'VariableNames', groups);
-entro.mIC = array2table(entro.mIC, 'VariableNames', groups);
-fcomp.subj = array2table(fcomp.subj, 'VariableNames', groups);
-fcomp.mIC = array2table(fcomp.mIC, 'VariableNames', groups);
+entro.subj = array2table(squeeze(mean(entro.IC, 1, 'omitnan')), 'VariableNames', groups);
+entro.mIC = array2table(squeeze(mean(entro.IC, 2, 'omitnan')), 'VariableNames', groups);
+fcomp.subj = array2table(squeeze(mean(fcomp.IC, 1, 'omitnan')), 'VariableNames', groups);
+fcomp.mIC = array2table(squeeze(mean(fcomp.IC, 2, 'omitnan')), 'VariableNames', groups);
+
+% Find joint values (necessary because sum(NaN) == 0)
+entro.joint = squeeze(sum(entro.IC, 1, 'omitnan'));
+entro.joint(entro.joint == 0) = NaN;
+entro.joint = array2table(entro.joint, 'VariableNames', groups);
 
 
 %% Visualize FCD Distributions
@@ -538,28 +543,64 @@ if ~strcmpi(aType.compress, 'none')
     end
     
     % Plot components
-    fDims = [0 0 1280 1024];
-    F(N.fig:N.fig+1) = plotComponents(mships, z.thresh(1), ROI, cortex, origin, cind, N, fDims);
-    N.fig = N.fig+2;
+    fDims(1,:) = [0 0 1280 1024];
+    fDims(2,:) = [0 0 480 1024];
+    F(N.fig:N.fig+N.IC+1) = plotComponents(mships, z.thresh(1), ROI, cortex, origin, cind, N, fDims);
+    N.fig = N.fig+N.IC+2;
 end
 clear mships fDims
 
 
+%% Compare joint metrics
+
+% Generate dummy variables (necessary for compatibility)
+ej(1,:,:) = table2array(entro.joint);
+nic = N.IC; N.IC = 1;
+
+% Run permutation test on joint entropy
+[hjoint, pjoint, ~, FDRjoint, Sidakjoint] = compareComponentMetrics(ttype, pTarget, ej, N, groups, comps);
+% [hjoint, pjoint, ~, ~, ~] = robustTests(entro.joint{:,1}', entro.joint{:,2}', [], 'p',pTarget, 'testtype',ttype);
+% hjoint = table(hjoint, 'VariableNames', strjoin([groups(comps(1)), "v.", groups(comps(2))], ' '));
+% pjoint = table(pjoint, 'VariableNames', strjoin([groups(comps(1)), "v.", groups(comps(2))], ' '));
+
+% Plot results for joint entropy
+fDims = [0 1024-256 1280 256];
+F(N.fig) = plotComponentMetrics(1, ej, "Joint Entropy", comps, groups, FDRjoint, cind, [1.07 1.1 1.13], fDims, []);
+
+% Reconvert dummy variables
+N.IC = nic;
+clear ej nic
+
+
 %% Compare component metrics
 
-% Entropy
+% Component Entropies
+fDims = [0 1024-256 1280 256];
 for s = 1:numel(spaces)
-    [K, h, p, tstat, FDR, Sidak] = compareComponents(z, cind, dim, ttypes, pTarget, prange, origin,cortex,ROI, entro.(spaces(s)), N, memberships, groups, comps);
-    F(numel(F)+1:numel(F)+numel(K)) = K;
+    N.fig = N.fig + 1;
+    [h, p, tstat, FDR, Sidak] = compareComponentMetrics(ttype, pTarget, entro.(spaces(s)), N, groups, comps);
+    if ~strcmpi(aType.compress, 'none')
+        F(N.fig) = plotComponentMetrics(N.IC, entro.(spaces(s)), "Entropy", comps, groups, FDR, cind, [1.03 1.07 1.1], fDims, []);
+    end
 end
-clear K
 
 
 %% Save results
 
 % Save figures
-if exist('F', 'var')
+if exist('F', 'var') && strcmpi(aType.compress, 'none')
 	savefig(F, fullfile(path{6}, fileName), 'compact');
+    saveas(F(8), fullfile(path{6}, strjoin([fileName, "JointEntropy"], '_')), 'jpeg');
+	clear F ax
+elseif exist('F', 'var')
+	savefig(F, fullfile(path{6}, fileName), 'compact');
+    saveas(F(8), fullfile(path{6}, strjoin([fileName, "SpatialMaps"], '_')), 'jpeg');
+    saveas(F(9), fullfile(path{6}, strjoin([fileName, "ComponentMaps"], '_')), 'jpeg');
+    for k = 10:N.IC+9
+        saveas(F(k), fullfile(path{6}, strjoin([fileName, strcat("Comp", num2str(k-9))], '_')), 'jpeg');
+    end
+    saveas(F(N.IC+10), fullfile(path{6}, strjoin([fileName, "JointEntropy"], '_')), 'jpeg');
+    saveas(F(N.IC+11), fullfile(path{6}, strjoin([fileName, "ComponentEntropy"], '_')), 'jpeg');
 	clear F ax
 end
 

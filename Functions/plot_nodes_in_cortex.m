@@ -80,11 +80,11 @@ if ~isempty(map) && iscell(map)
 	[thr,con] = size(map);
 	for r = 1:thr
 		for c = 1:con
-			for f = 1:numel(map{r,c})
-				a(f) = sum(map{r,c}{f},'all');
-			end
-			a = a./max(a,[],'all','omitnan');
-			[~,ai(r,c)] = max(a);
+% 			for f = 1:numel(map{r,c})
+% 				a(f) = sum(map{r,c}{f},'all');
+% 			end
+% 			a = a./max(a,[],'all','omitnan');
+% 			[~,ai(r,c)] = max(a);
 			
 			for f = 1:numel(map{r,c})
 				[l(:,1), l(:,2)] = find(map{r,c}{f});
@@ -97,12 +97,12 @@ if ~isempty(map) && iscell(map)
 			end
 		end
 	end
-	if ~isempty(lgnd)
-		for c = 1:con
-			l(c) = h(ai(c),c);
-		end
-		legend(l, lgnd, 'Location','southoutside');
-	end
+% 	if ~isempty(lgnd)
+% 		for c = 1:con
+% 			l(c) = h(ai(c),c);
+% 		end
+% 		legend(l, lgnd, 'Location','southoutside');
+% 	end
 elseif ~isempty(map)
 	[l(:,1), l(:,2)] = find(map);
 	for s = 1:size(l, 1)
